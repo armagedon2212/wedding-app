@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, Download, Loader2, X, Play, Image as ImageIcon, Film } from 'lucide-react';
+import { Camera, Download, Loader2, X, Play, Image as ImageIcon, Film, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, storage, auth } from '../firebase';
-import { collection, addDoc, query, onSnapshot, serverTimestamp, where } from 'firebase/firestore';
+import { collection, addDoc, query, onSnapshot, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 interface PhotoData {
@@ -10,6 +10,7 @@ interface PhotoData {
   url: string;
   thumbnailUrl: string;
   mediaType?: 'image' | 'video';
+  uploaderId?: string;
 }
 
 export default function GalleryTab() {
@@ -47,6 +48,21 @@ export default function GalleryTab() {
       setSelectedIndex(selectedIndex - 1);
     } else if (info.offset.x < -50 && selectedIndex < filteredMedia.length - 1) {
       setSelectedIndex(selectedIndex + 1);
+    }
+  };
+
+  const handleDelete = async (photo: PhotoData) => {
+    if (!window.confirm("Czy na pewno chcesz usunąć ten element?")) return;
+    try {
+      await updateDoc(doc(db, 'photos', photo.id), {
+        status: 'deleted'
+      });
+      if (selectedImage?.id === photo.id) {
+        setSelectedIndex(null);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Błąd podczas usuwania. Upewnij się, że jesteś autorem tego pliku.");
     }
   };
 
@@ -230,7 +246,7 @@ export default function GalleryTab() {
           </div>
           <div className="text-right">
             <span className="text-[10px] uppercase tracking-[0.3em] font-semibold text-[#8C8C8C] mb-1">Data</span>
-            <p className="text-sm font-medium">DZISIAJ</p>
+            <p className="text-sm font-medium">3 LIPCA</p>
           </div>
         </header>
 
@@ -287,31 +303,51 @@ export default function GalleryTab() {
           
           {filteredMedia.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 h-full">
-              {filteredMedia.map((img, idx) => (
-                <div 
-                  key={img.id} 
-                  className="relative group rounded-xl overflow-hidden shadow-sm bg-gray-100 aspect-square cursor-pointer active:scale-[0.98] transition-transform"
-                  onClick={() => setSelectedIndex(idx)}
-                >
-                  {img.thumbnailUrl ? (
-                     <img
-                       src={img.thumbnailUrl}
-                       className="w-full h-full object-cover"
-                       alt="Wspomnienie weselne"
-                       loading="lazy"
-                     />
-                  ) : (
-                     <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                       <Film size={24} className="text-gray-400" />
-                     </div>
-                  )}
-                  {img.mediaType === 'video' && (
-                     <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                        <Play size={32} className="text-white opacity-90 drop-shadow-md" fill="white" />
-                     </div>
-                  )}
-                </div>
-              ))}
+              {filteredMedia.map((img, idx) => {
+                const isOwner = auth.currentUser?.uid === img.uploaderId;
+                return (
+                  <div 
+                    key={img.id} 
+                    className="relative group rounded-xl overflow-hidden shadow-sm bg-gray-100 aspect-square cursor-pointer active:scale-[0.98] transition-transform"
+                    onClick={() => setSelectedIndex(idx)}
+                  >
+                    {img.thumbnailUrl ? (
+                       <img
+                         src={img.thumbnailUrl}
+                         className="w-full h-full object-cover"
+                         alt="Wspomnienie weselne"
+                         loading="lazy"
+                       />
+                    ) : (
+                       <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                         <Film size={24} className="text-gray-400" />
+                       </div>
+                    )}
+                    {img.mediaType === 'video' && (
+                       <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                          <Play size={32} className="text-white opacity-90 drop-shadow-md" fill="white" />
+                       </div>
+                    )}
+                    
+                    {isOwner && (
+                      <>
+                        <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 rounded text-[10px] uppercase font-bold tracking-wider text-white">
+                          Twój plik
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(img);
+                          }}
+                          className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-red-500 rounded-full text-white backdrop-blur-sm transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-4 py-16 flex flex-col items-center justify-center text-center text-[#8C8C8C] border-2 border-dashed border-[#EAE8E2] rounded-2xl bg-[#f8f8f5]">
@@ -338,13 +374,24 @@ export default function GalleryTab() {
               >
                 <X size={24} />
               </button>
-              <button 
-                onClick={() => handleDownload(selectedImage.url)}
-                className="text-white flex items-center gap-2 p-2 px-4 rounded-full bg-[#4A5D4E] active:scale-95 font-bold text-sm transition-transform"
-              >
-                <Download size={18} />
-                Pobierz
-              </button>
+              <div className="flex items-center gap-2">
+                {auth.currentUser?.uid === selectedImage.uploaderId && (
+                  <button 
+                    onClick={() => handleDelete(selectedImage)}
+                    className="text-white flex items-center justify-center p-2 rounded-full bg-red-500/80 hover:bg-red-500 active:scale-95 transition-transform"
+                    title="Usuń"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleDownload(selectedImage.url)}
+                  className="text-white flex items-center gap-2 p-2 px-4 rounded-full bg-[#4A5D4E] active:scale-95 font-bold text-sm transition-transform"
+                >
+                  <Download size={18} />
+                  Pobierz
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 w-full flex items-center justify-center p-4 overflow-hidden relative">

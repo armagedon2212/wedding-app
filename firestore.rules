@@ -35,7 +35,8 @@ service cloud.firestore {
                        isValidId(photoId) &&
                        existing().status == 'active' &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
-                       incoming().status == 'deleted'; // DJ or owner can delete
+                       incoming().status == 'deleted' &&
+                       existing().uploaderId == request.auth.uid;
     }
     
     function isValidSong(data) {
