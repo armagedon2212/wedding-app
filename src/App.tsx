@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Image, Calendar, Utensils, Music, Grid3X3, Map } from 'lucide-react';
 import GalleryTab from './components/GalleryTab';
 import ScheduleTab from './components/ScheduleTab';
 import MenuTab from './components/MenuTab';
 import SuggestTab from './components/SuggestTab';
 import BingoTab from './components/BingoTab';
-import SeatingTab from './components/SeatingTab';
 import DjView from './components/DjView';
+import AdminPhotos from './components/AdminPhotos';
 import WelcomeScreen from './components/WelcomeScreen';
 import { initAuth } from './firebase';
 
 function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab === 'seating' ? 'schedule' : initialTab);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (initialTab === 'seating') {
+      navigate('/#seating', { replace: true });
+    }
+  }, [initialTab, navigate]);
 
   const tabs = [
     { id: 'gallery', label: 'Galeria', icon: <Image size={24} strokeWidth={1.5} />, component: <GalleryTab /> },
     { id: 'schedule', label: 'Plan', icon: <Calendar size={24} strokeWidth={1.5} />, component: <ScheduleTab /> },
-    { id: 'seating', label: 'Stoły', icon: <Map size={24} strokeWidth={1.5} />, component: <SeatingTab /> },
     { id: 'menu', label: 'Menu', icon: <Utensils size={24} strokeWidth={1.5} />, component: <MenuTab /> },
     { id: 'suggest', label: 'Zaproponuj', icon: <Music size={24} strokeWidth={1.5} />, component: <SuggestTab /> },
     { id: 'bingo', label: 'Bingo', icon: <Grid3X3 size={24} strokeWidth={1.5} />, component: <BingoTab /> },
@@ -36,7 +42,10 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  navigate('/', { replace: true });
+                }}
                 className={`flex flex-col items-center gap-1.5 transition-colors px-3 ${
                   isActive ? 'text-[#4A5D4E]' : 'text-[#AAA] hover:text-[#4A5D4E]'
                 }`}
@@ -55,10 +64,11 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
 }
 
 function WelcomeRouter() {
+  const location = useLocation();
   const [showWelcome, setShowWelcome] = useState(() => {
-    return localStorage.getItem('wedding_welcome_seen') !== 'true';
+    return localStorage.getItem('wedding_welcome_seen') !== 'true' && location.hash !== '#seating';
   });
-  const [initialTab, setInitialTab] = useState('gallery');
+  const [initialTab, setInitialTab] = useState(location.hash === '#seating' ? 'seating' : 'gallery');
 
   const handleEnter = (tabId: string = 'gallery') => {
     localStorage.setItem('wedding_welcome_seen', 'true');
@@ -83,6 +93,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<WelcomeRouter />} />
         <Route path="/dj" element={<DjView />} />
+        <Route path="/admin/photos" element={<AdminPhotos />} />
       </Routes>
     </BrowserRouter>
   );

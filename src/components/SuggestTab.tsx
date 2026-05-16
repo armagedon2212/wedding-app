@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Music, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, updateDoc, increment, getDoc, setDoc, where } from 'firebase/firestore';
 
