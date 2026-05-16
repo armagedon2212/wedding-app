@@ -61,8 +61,12 @@ service cloud.firestore {
                        (
                          (incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'deleted') ||
                          (incoming().diff(existing()).affectedKeys().hasOnly(['voteCount']) && 
-                          (incoming().voteCount == existing().voteCount + 1 || incoming().voteCount == existing().voteCount - 1) &&
-                          existsAfter(/databases/$(database)/documents/songs/$(songId)/votes/$(request.auth.uid))
+                          (
+                            ( (incoming().voteCount == existing().voteCount + 1 || incoming().voteCount == existing().voteCount - 1 || incoming().voteCount == existing().voteCount + 2 || incoming().voteCount == existing().voteCount - 2) &&
+                              existsAfter(/databases/$(database)/documents/songs/$(songId)/votes/$(request.auth.uid)) ) ||
+                            ( (incoming().voteCount == existing().voteCount + 1 || incoming().voteCount == existing().voteCount - 1) &&
+                              !existsAfter(/databases/$(database)/documents/songs/$(songId)/votes/$(request.auth.uid)) )
+                          )
                          )
                        );
     }
@@ -83,6 +87,8 @@ service cloud.firestore {
                        userId == request.auth.uid &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['value']) &&
                        incoming().value in [1, -1];
+                       
+      allow delete: if isAnonymousOrSignedIn() && userId == request.auth.uid;
     }
   }
 }

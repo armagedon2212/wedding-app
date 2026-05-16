@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { Music, ThumbsUp, ThumbsDown } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
-import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, updateDoc, increment, getDoc, setDoc, where } from 'firebase/firestore';
+import { collection, addDoc, query, onSnapshot, serverTimestamp, doc, updateDoc, increment, getDoc, setDoc, deleteDoc, where } from 'firebase/firestore';
 
 interface Song {
   id: string;
@@ -29,14 +29,22 @@ export default function SuggestTab() {
       // Sort locally by votes descending
       fetched.sort((a, b) => b.voteCount - a.voteCount);
       setSongs(fetched);
+
+      if (auth.currentUser) {
+         fetched.forEach(async (song) => {
+           try {
+             const voteRef = doc(db, `songs/${song.id}/votes/${auth.currentUser!.uid}`);
+             const voteSnap = await getDoc(voteRef);
+             if (voteSnap.exists()) {
+               setUserVotes(prev => ({ ...prev, [song.id]: voteSnap.data().value }));
+             }
+           } catch(e) {
+             console.error("Error fetching vote", e);
+           }
+         });
+      }
     });
     return () => unsubscribe();
-  }, []);
-
-  // Fetch current user's votes to disable voting twice
-  useEffect(() => {
-    // If we wanted perfectly persistent UX, we could listen to a collection, 
-    // or just rely on local state for quick feedback.
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,28 +79,39 @@ export default function SuggestTab() {
       return;
     }
     
-    // Optimistic UI could be added here, but let's keep it simple
     try {
       const voteRef = doc(db, `songs/${songId}/votes/${auth.currentUser.uid}`);
       const voteDoc = await getDoc(voteRef);
       
       if (voteDoc.exists()) {
         const existingVal = voteDoc.data().value;
-        if (existingVal === value) return; // already voted this way
-
-        // change vote (-1 to 1 means +2)
-        const diff = value - existingVal;
-        await setDoc(voteRef, { userId: auth.currentUser.uid, value });
-        await updateDoc(doc(db, 'songs', songId), {
-          voteCount: increment(diff)
-        });
+        if (existingVal === value) {
+          // Untoggle
+          await deleteDoc(voteRef);
+          await updateDoc(doc(db, 'songs', songId), {
+            voteCount: increment(-value)
+          });
+          setUserVotes(prev => {
+            const next = { ...prev };
+            delete next[songId];
+            return next;
+          });
+        } else {
+          // change vote
+          const diff = value - existingVal;
+          await setDoc(voteRef, { userId: auth.currentUser.uid, value });
+          await updateDoc(doc(db, 'songs', songId), {
+            voteCount: increment(diff)
+          });
+          setUserVotes(prev => ({ ...prev, [songId]: value }));
+        }
       } else {
         await setDoc(voteRef, { userId: auth.currentUser.uid, value });
         await updateDoc(doc(db, 'songs', songId), {
           voteCount: increment(value)
         });
+        setUserVotes(prev => ({ ...prev, [songId]: value }));
       }
-      setUserVotes(prev => ({ ...prev, [songId]: value }));
     } catch (e) {
       console.error(e);
     }
