@@ -15,7 +15,36 @@ export default function GalleryTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<PhotoData[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<PhotoData | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  
+  const selectedImage = selectedIndex !== null ? images[selectedIndex] : null;
+
+  const handleDownload = async (url: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `zdjecie_weselne_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      console.error("Direct download failed", e);
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleDragEnd = (event: any, info: any) => {
+    if (selectedIndex === null) return;
+    if (info.offset.x > 50 && selectedIndex > 0) {
+      setSelectedIndex(selectedIndex - 1);
+    } else if (info.offset.x < -50 && selectedIndex < images.length - 1) {
+      setSelectedIndex(selectedIndex + 1);
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'photos'), where('status', '==', 'active'));
@@ -191,7 +220,7 @@ export default function GalleryTab() {
                 <div 
                   key={img.id} 
                   className="relative group rounded-xl overflow-hidden shadow-sm bg-gray-100 aspect-square cursor-pointer active:scale-[0.98] transition-transform"
-                  onClick={() => setSelectedImage(img)}
+                  onClick={() => setSelectedIndex(images.findIndex(i => i.id === img.id))}
                 >
                   <img
                     src={img.thumbnailUrl}
@@ -222,31 +251,40 @@ export default function GalleryTab() {
           >
             <div className="flex justify-between items-center p-4">
               <button 
-                onClick={() => setSelectedImage(null)}
+                onClick={() => setSelectedIndex(null)}
                 className="text-white p-2 rounded-full bg-white/10 active:scale-95"
               >
                 <X size={24} />
               </button>
-              <a 
-                href={selectedImage.url} 
-                download 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <button 
+                onClick={() => handleDownload(selectedImage.url)}
                 className="text-white flex items-center gap-2 p-2 px-4 rounded-full bg-[#4A5D4E] active:scale-95 font-bold text-sm"
               >
                 <Download size={18} />
                 Pobierz
-              </a>
+              </button>
             </div>
             
-            <div className="flex-1 w-full flex items-center justify-center p-4 overflow-hidden">
-              <motion.img
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                src={selectedImage.url}
-                className="max-w-full max-h-full object-contain"
-                alt="Wspomnienie weselne"
-              />
+            <div className="flex-1 w-full flex items-center justify-center p-4 overflow-hidden relative">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={selectedImage.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.8}
+                  onDragEnd={handleDragEnd}
+                  src={selectedImage.url}
+                  className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
+                  alt="Wspomnienie weselne"
+                />
+              </AnimatePresence>
+            </div>
+            <div className="pb-8 pt-4 text-center text-white/50 text-xs tracking-wider uppercase">
+              {selectedIndex! + 1} z {images.length} • Przesuń w bok
             </div>
           </motion.div>
         )}

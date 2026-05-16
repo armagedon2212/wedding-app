@@ -35,8 +35,8 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
         {tabs.find(t => t.id === activeTab)?.component}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#EEE] z-50 pb-safe overflow-x-auto scrollbar-hide">
-        <div className="max-w-lg mx-auto flex justify-start sm:justify-between items-center px-4 py-4 min-w-max">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#EEE] z-50 pb-safe">
+        <div className="max-w-lg mx-auto flex justify-between items-center px-4 py-4 w-full">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (

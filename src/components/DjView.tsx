@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Trash2, Music } from 'lucide-react';
-import { db, auth } from '../firebase';
-import { collection, query, onSnapshot, doc, updateDoc, where } from 'firebase/firestore';
+import { db } from '../firebase';
+import { collection, query, onSnapshot, where } from 'firebase/firestore';
 
 interface Song {
   id: string;
@@ -30,78 +28,39 @@ export default function DjView() {
     return () => unsubscribe();
   }, []);
 
-  const handleDelete = async (songId: string) => {
-    if (!window.confirm("Na pewno chcesz usunąć tę propozycję?")) return;
-    if (!auth.currentUser) return;
-    
-    try {
-      await updateDoc(doc(db, 'songs', songId), {
-        status: 'deleted'
-      });
-    } catch (e) {
-      console.error(e);
-      alert("Błąd podczas usuwania. Upewnij się że masz połączenie z siecią.");
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#FAF9F6] p-6 lg:p-12 font-sans text-[#2D2D2D]">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-10 flex flex-col md:flex-row justify-between items-baseline gap-4 border-b border-[#EAE8E2] pb-6">
-          <div>
-            <span className="text-[10px] uppercase tracking-[0.3em] font-semibold text-[#8C8C8C] mb-2 block">Panel Sterowania</span>
-            <h1 className="font-serif text-4xl italic text-[#4A5D4E] flex items-center gap-3">
-              <Music className="text-[#C5A27D]" size={32} />
-              DJ Playlist
-            </h1>
-          </div>
-          <div className="text-right">
-            <span className="text-xs uppercase tracking-widest font-bold text-[#8C8C8C]">Eliza & Miłosz</span>
-          </div>
+    <div className="min-h-screen bg-white p-4 sm:p-8 font-sans text-gray-900">
+      <div className="max-w-2xl mx-auto">
+        <header className="mb-6 pb-4 border-b border-gray-200 flex justify-between items-center">
+          <h1 className="text-xl font-bold">Zaproponowane piosenki</h1>
+          <span className="text-xs font-medium text-gray-500 uppercase">Eliza & Miłosz</span>
         </header>
 
-        <div className="bg-white rounded-3xl shadow-xl border border-[#EEE] overflow-hidden">
+        <div className="overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#fcfbf9] border-b border-[#EAE8E2] text-xs uppercase tracking-widest text-[#8C8C8C]">
-                <th className="px-6 py-4 font-bold">Pozycja</th>
-                <th className="px-6 py-4 font-bold">Utwór</th>
-                <th className="px-6 py-4 font-bold text-center">Głosy</th>
-                <th className="px-6 py-4 font-bold text-right">Akcja</th>
+              <tr className="text-xs text-gray-500 border-b border-gray-200">
+                <th className="py-2 pl-2 w-8">#</th>
+                <th className="py-2">Utwór / Wykonawca</th>
+                <th className="py-2 text-right pr-2 w-16">Głosy</th>
               </tr>
             </thead>
             <tbody>
               {songs.map((song, i) => (
-                <motion.tr 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  key={song.id} 
-                  className="border-b border-[#EAE8E2] hover:bg-[#FAF9F6] transition-colors"
-                >
-                  <td className="px-6 py-4 font-mono text-sm text-[#8C8C8C]">#{i + 1}</td>
-                  <td className="px-6 py-4">
-                    <div className="font-serif italic text-lg">{song.title}</div>
-                    {song.artist && <div className="text-xs font-medium uppercase tracking-wider text-[#555] mt-1">{song.artist}</div>}
+                <tr key={song.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td className="py-3 pl-2 text-sm text-gray-400">{i + 1}</td>
+                  <td className="py-3">
+                    <div className="text-sm font-semibold">{song.title}</div>
+                    {song.artist && <div className="text-xs text-gray-500 mt-0.5">{song.artist}</div>}
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="inline-flex items-center justify-center bg-[#EAE8E2] text-[#4A5D4E] font-bold text-sm w-8 h-8 rounded-full">
-                      {song.voteCount}
-                    </span>
+                  <td className="py-3 text-right pr-2 text-sm font-bold text-gray-700">
+                    {song.voteCount}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleDelete(song.id)}
-                      className="text-[#AAA] hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                      title="Usuń propozycję"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </motion.tr>
+                </tr>
               ))}
               {songs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-[#8C8C8C] italic">
+                  <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">
                     Nikt jeszcze nie zaproponował żadnej piosenki.
                   </td>
                 </tr>
