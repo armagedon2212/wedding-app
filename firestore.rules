@@ -11,8 +11,11 @@ service cloud.firestore {
     function isAnonymousOrSignedIn() { return request.auth != null; }
 
     function isValidPhoto(data) {
-      return data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId']) &&
-             data.keys().size() == 5 &&
+      let isOld = data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId']) && data.keys().size() == 5;
+      let isNew = data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId', 'mediaType']) && 
+                  data.keys().size() == 6 && 
+                  data.mediaType in ['image', 'video'];
+      return (isOld || isNew) &&
              data.url is string && data.url.size() <= 2048 &&
              data.thumbnailUrl is string && data.thumbnailUrl.size() <= 500000 && 
              data.status in ['active', 'deleted'] &&

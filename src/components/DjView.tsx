@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
+import { Trash2 } from 'lucide-react';
 
 interface Song {
   id: string;
@@ -28,6 +29,18 @@ export default function DjView() {
     return () => unsubscribe();
   }, []);
 
+  const handleDelete = async (songId: string) => {
+    if (!window.confirm("Na pewno chcesz usunąć tę pozycję?")) return;
+    try {
+      await updateDoc(doc(db, 'songs', songId), {
+        status: 'deleted'
+      });
+    } catch (e) {
+      console.error(e);
+      alert("Błąd podczas usuwania. Upewnij się, że masz uprawnienia jako DJ.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white p-4 sm:p-8 font-sans text-gray-900">
       <div className="max-w-2xl mx-auto">
@@ -43,6 +56,7 @@ export default function DjView() {
                 <th className="py-2 pl-2 w-8">#</th>
                 <th className="py-2">Utwór / Wykonawca</th>
                 <th className="py-2 text-right pr-2 w-16">Głosy</th>
+                <th className="py-2 text-right pr-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
@@ -56,11 +70,20 @@ export default function DjView() {
                   <td className="py-3 text-right pr-2 text-sm font-bold text-gray-700">
                     {song.voteCount}
                   </td>
+                  <td className="py-3 text-right pr-2">
+                    <button 
+                      onClick={() => handleDelete(song.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                      title="Usuń propozycję"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {songs.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">
+                  <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
                     Nikt jeszcze nie zaproponował żadnej piosenki.
                   </td>
                 </tr>

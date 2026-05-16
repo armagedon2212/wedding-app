@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Loader2, ArrowLeft } from 'lucide-react';
+import { Download, Loader2, ArrowLeft, Play, Film } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
@@ -11,6 +11,7 @@ interface PhotoData {
   id: string;
   url: string;
   thumbnailUrl: string;
+  mediaType?: 'image' | 'video';
 }
 
 export default function AdminPhotos() {
@@ -50,7 +51,8 @@ export default function AdminPhotos() {
         try {
           const response = await fetch(images[i].url);
           const blob = await response.blob();
-          folder?.file(`zdjecie_${i+1}.jpg`, blob);
+          const ext = images[i].mediaType === 'video' ? 'mp4' : 'jpg';
+          folder?.file(`wspomnienie_${i+1}.${ext}`, blob);
         } catch (e) {
           console.error("Skipped image", e);
         }
@@ -107,12 +109,23 @@ export default function AdminPhotos() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {images.map((img) => (
               <div key={img.id} className="relative group rounded-xl overflow-hidden shadow-sm bg-gray-100 aspect-square">
-                <img
-                  src={img.thumbnailUrl}
-                  className="w-full h-full object-cover"
-                  alt="Podgląd"
-                  loading="lazy"
-                />
+                {img.thumbnailUrl ? (
+                  <img
+                    src={img.thumbnailUrl}
+                    className="w-full h-full object-cover"
+                    alt="Podgląd"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                    <Film size={24} className="text-gray-400" />
+                  </div>
+                )}
+                {img.mediaType === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                    <Play size={24} className="text-white opacity-90 drop-shadow-md" fill="white" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
