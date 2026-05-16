@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Photo": {
+      "title": "Photo",
+      "description": "Represents an uploaded photo.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "createdAt": { "type": "object", "description": "Server Timestamp" },
+        "status": { "type": "string", "enum": ["active", "deleted"] },
+        "uploaderId": { "type": "string" }
+      },
+      "required": ["url", "thumbnailUrl", "createdAt", "status", "uploaderId"]
+    },
+    "Song": {
+      "title": "Song",
+      "description": "Represents a song suggestion.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "createdAt": { "type": "object", "description": "Server Timestamp" },
+        "status": { "type": "string", "enum": ["active", "deleted"] },
+        "suggesterId": { "type": "string" },
+        "voteCount": { "type": "number" }
+      },
+      "required": ["title", "artist", "createdAt", "status", "suggesterId", "voteCount"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "Represents a vote on a song.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "value": { "type": "number", "enum": [1, -1] }
+      },
+      "required": ["userId", "value"]
+    }
+  },
+  "firestore": {
+    "photos": {
+      "schema": "Photo",
+      "description": "Global collection of all photos uploaded during the wedding."
+    },
+    "songs": {
+      "schema": "Song",
+      "description": "Global collection of suggested songs."
+    },
+    "songs/{songId}/votes": {
+      "schema": "Vote",
+      "description": "Votes for a song to ensure users can only vote once."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Weselne Wspomnienia",
+  "description": "Aplikacja ślubna do udostępniania zdjęć, harmonogramu i zabaw.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

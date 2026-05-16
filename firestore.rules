@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isAnonymousOrSignedIn() { return request.auth != null; }
+
+    function isValidPhoto(data) {
+      return data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId']) &&
+             data.keys().size() == 5 &&
+             data.url is string && data.url.size() <= 2048 &&
+             data.thumbnailUrl is string && data.thumbnailUrl.size() <= 500000 && 
+             data.status in ['active', 'deleted'] &&
+             data.uploaderId == request.auth.uid;
+    }
+    
+    match /photos/{photoId} {
+      allow read: if resource.data.status == 'active';
+      allow list: if resource.data.status == 'active';
+      
+      allow create: if isAnonymousOrSignedIn() && 
+                       isValidId(photoId) &&
+                       isValidPhoto(incoming()) && 
+                       incoming().createdAt == request.time;
+                       
+      allow update: if isAnonymousOrSignedIn() && 
+                       isValidId(photoId) &&
+                       existing().status == 'active' &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+                       incoming().status == 'deleted'; // DJ or owner can delete
+    }
+    
+    function isValidSong(data) {
+      return data.keys().hasAll(['title', 'artist', 'createdAt', 'status', 'suggesterId', 'voteCount']) &&
+             data.keys().size() == 6 &&
+             data.title is string && data.title.size() <= 200 && data.title.size() > 0 &&
+             data.artist is string && data.artist.size() <= 200 &&
+             data.status in ['active', 'deleted'] &&
+             data.suggesterId == request.auth.uid &&
+             data.voteCount is number;
+    }
+    
+    match /songs/{songId} {
+      allow read: if resource.data.status == 'active';
+      allow list: if resource.data.status == 'active';
+      
+      allow create: if isAnonymousOrSignedIn() && 
+                       isValidId(songId) &&
+                       isValidSong(incoming()) && 
+                       incoming().createdAt == request.time &&
+                       incoming().voteCount == 0;
+                       
+      allow update: if isAnonymousOrSignedIn() && 
+                       isValidId(songId) &&
+                       existing().status == 'active' &&
+                       (
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'deleted') ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['voteCount']) && 
+                          (incoming().voteCount == existing().voteCount + 1 || incoming().voteCount == existing().voteCount - 1) &&
+                          existsAfter(/databases/$(database)/documents/songs/$(songId)/votes/$(request.auth.uid))
+                         )
+                       );
+    }
+    
+    match /songs/{songId}/votes/{userId} {
+      allow read: if isAnonymousOrSignedIn() && userId == request.auth.uid;
+      
+      allow create: if isAnonymousOrSignedIn() && 
+                       isValidId(songId) &&
+                       userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'value']) &&
+                       incoming().keys().size() == 2 &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().value in [1, -1];
+                       
+      allow update: if isAnonymousOrSignedIn() && 
+                       isValidId(songId) &&
+                       userId == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['value']) &&
+                       incoming().value in [1, -1];
+    }
+  }
+}
