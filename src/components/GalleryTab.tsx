@@ -24,8 +24,15 @@ export default function GalleryTab() {
   const selectedImage = selectedIndex !== null ? filteredMedia[selectedIndex] : null;
 
   const handleDownload = async (url: string) => {
+    // Check if we can open a new tab immediately to bypass popup blockers
+    const newTab = window.open('', '_blank');
+    if (newTab) {
+      newTab.document.write("<div style='font-family: sans-serif; padding: 20px;'>Przygotowywanie pliku do pobrania...</div>");
+    }
+
     try {
       const response = await fetch(url);
+      if (!response.ok) throw new Error('Błąd sieci / CORS');
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -36,9 +43,16 @@ export default function GalleryTab() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(blobUrl);
+      
+      if (newTab) newTab.close(); // Success, close the tab
     } catch (e) {
       console.error("Direct download failed", e);
-      window.open(url, '_blank');
+      if (newTab) {
+        // Fallback: load the URL in the opened tab
+        newTab.location.href = url;
+      } else {
+        alert("Proszę odblokować wyskakujące okienka (pop-up), aby pobrać plik.");
+      }
     }
   };
 
