@@ -110,13 +110,18 @@ export default function GalleryTab() {
       video.preload = 'metadata';
       video.muted = true;
       video.playsInline = true;
-      video.src = URL.createObjectURL(file);
       
+      const fallbackTimeout = setTimeout(() => {
+        clearTimeout(fallbackTimeout);
+        resolve(''); // Fallback if it hangs
+      }, 3000);
+
       video.onloadeddata = () => {
         video.currentTime = Math.min(0.5, video.duration / 2 || 0);
       };
       
       video.onseeked = () => {
+        clearTimeout(fallbackTimeout);
         const canvas = document.createElement('canvas');
         let width = video.videoWidth;
         let height = video.videoHeight;
@@ -143,9 +148,13 @@ export default function GalleryTab() {
       };
       
       video.onerror = () => {
+        clearTimeout(fallbackTimeout);
         URL.revokeObjectURL(video.src);
         resolve(''); // empty thumbnail fallback
       };
+
+      video.src = URL.createObjectURL(file);
+      video.load();
     });
   };
 
