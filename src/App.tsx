@@ -12,14 +12,8 @@ import WelcomeScreen from './components/WelcomeScreen';
 import { initAuth } from './firebase';
 
 function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
-  const [activeTab, setActiveTab] = useState(initialTab === 'seating' ? 'schedule' : initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (initialTab === 'seating') {
-      navigate('/#seating', { replace: true });
-    }
-  }, [initialTab, navigate]);
 
   const tabs = [
     { id: 'gallery', label: 'Galeria', icon: <Image size={24} strokeWidth={1.5} />, component: <GalleryTab /> },
@@ -36,7 +30,7 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#EEE] z-50 pb-safe">
-        <div className="max-w-lg mx-auto flex justify-between items-center px-4 py-4 w-full">
+        <div className="max-w-lg mx-auto flex justify-between items-center px-2 py-3 sm:px-4 sm:py-4 w-full">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -46,14 +40,14 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
                   setActiveTab(tab.id);
                   navigate('/', { replace: true });
                 }}
-                className={`flex flex-col items-center gap-1.5 transition-colors px-3 ${
+                className={`flex flex-col items-center gap-1 sm:gap-1.5 transition-colors px-1 sm:px-3 ${
                   isActive ? 'text-[#4A5D4E]' : 'text-[#AAA] hover:text-[#4A5D4E]'
                 }`}
               >
                 <div className="flex items-center justify-center">
                   {tab.icon}
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-tighter">{tab.label}</span>
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter">{tab.label}</span>
               </button>
             );
           })}
@@ -64,15 +58,12 @@ function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
 }
 
 function WelcomeRouter() {
-  const location = useLocation();
   const [showWelcome, setShowWelcome] = useState(() => {
-    return localStorage.getItem('wedding_welcome_seen') !== 'true' && location.hash !== '#seating';
+    return localStorage.getItem('wedding_welcome_seen') !== 'true';
   });
-  const [initialTab, setInitialTab] = useState(location.hash === '#seating' ? 'seating' : 'gallery');
 
-  const handleEnter = (tabId: string = 'gallery') => {
+  const handleEnter = () => {
     localStorage.setItem('wedding_welcome_seen', 'true');
-    setInitialTab(tabId);
     setShowWelcome(false);
   };
 
@@ -80,7 +71,7 @@ function WelcomeRouter() {
     return <WelcomeScreen onEnter={handleEnter} />;
   }
 
-  return <MainApp initialTab={initialTab} />;
+  return <MainApp initialTab="gallery" />;
 }
 
 export default function App() {

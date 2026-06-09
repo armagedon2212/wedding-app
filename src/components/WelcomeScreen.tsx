@@ -33,18 +33,11 @@ export default function WelcomeScreen({ onEnter }: Props) {
 
         <div className="space-y-4">
           <button
-            onClick={() => onEnter('seating')}
+            onClick={() => onEnter('gallery')}
             className="group relative w-full inline-flex items-center justify-center gap-3 bg-[#4A5D4E] text-white px-6 py-4 rounded-full hover:bg-[#3D4D40] transition-all shadow-md active:scale-95"
           >
-            <Map size={18} />
-            <span className="text-xs font-bold tracking-widest uppercase">Znajdź swoje miejsce</span>
-          </button>
-          
-          <button
-            onClick={() => onEnter('gallery')}
-            className="w-full text-[#8C8C8C] text-xs font-bold tracking-widest uppercase hover:text-[#4A5D4E] transition-colors py-2"
-          >
-            Przejdź do aplikacji
+            <Sparkles size={18} />
+            <span className="text-xs font-bold tracking-widest uppercase">Dołącz do świętowania</span>
           </button>
         </div>
       </motion.div>
