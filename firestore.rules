@@ -10,6 +10,7 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isAnonymousOrSignedIn() { return request.auth != null; }
+    function isAdmin() { return request.auth != null && request.auth.token.email == "lewkowicz.olaf2@gmail.com" && request.auth.token.email_verified == true; }
 
     function isValidPhoto(data) {
       let isOld = data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId']) && data.keys().size() == 5;
@@ -37,7 +38,7 @@ service cloud.firestore {
                        existing().status == 'active' &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
                        incoming().status == 'deleted' &&
-                       existing().uploaderId == request.auth.uid;
+                       (existing().uploaderId == request.auth.uid || isAdmin());
     }
     
     function isValidSong(data) {
@@ -98,9 +99,7 @@ service cloud.firestore {
     
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAnonymousOrSignedIn() && 
-                      request.auth.token.email == "lewkowicz.olaf2@gmail.com" && 
-                      request.auth.token.email_verified == true;
+      allow write: if isAdmin();
     }
   }
 }
