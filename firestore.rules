@@ -10,7 +10,17 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isAnonymousOrSignedIn() { return request.auth != null; }
-    function isAdmin() { return request.auth != null && request.auth.token.email == "lewkowicz.olaf2@gmail.com" && request.auth.token.email_verified == true; }
+    function isAdmin() { 
+      return request.auth != null && 
+             request.auth.token.email_verified == true && 
+             (
+               request.auth.token.email == "lewkowicz.olaf2@gmail.com" ||
+               (
+                 exists(/databases/$(database)/documents/settings/admins) &&
+                 request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.emails
+               )
+             ); 
+    }
 
     function isValidPhoto(data) {
       let isOld = data.keys().hasAll(['url', 'thumbnailUrl', 'createdAt', 'status', 'uploaderId']) && data.keys().size() == 5;

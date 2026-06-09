@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Download, Loader2, ArrowLeft, Play, Film, Clock, Lock, Unlock, 
   Utensils, Calendar, Grid3X3, Image as ImageIcon, Save, Trash2, 
-  Plus, Edit, Check, RotateCcw, AlertTriangle, LogIn, LogOut, Trash
+  Plus, Edit, Check, RotateCcw, AlertTriangle, LogIn, LogOut, Trash, Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth, storage } from '../firebase';
@@ -59,7 +59,7 @@ export default function AdminPanel() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'lock' | 'menu' | 'schedule' | 'bingo'>('photos');
+  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'lock' | 'menu' | 'schedule' | 'bingo' | 'general'>('photos');
 
   // Loaders
   const [loading, setLoading] = useState(true);
@@ -82,18 +82,28 @@ export default function AdminPanel() {
   // Bingo configuration
   const [bingoPrompts, setBingoPrompts] = useState<string[]>(DEFAULT_BINGO);
 
+  // General configuration
+  const [pageTitle, setPageTitle] = useState('miloszeliza.pl');
+  const [faviconUrl, setFaviconUrl] = useState('');
+
+  // Admin list configuration
+  const [adminEmails, setAdminEmails] = useState<string[]>([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+
+  const checkIfAdmin = (user: any, list: string[]) => {
+    if (!user || !user.email) return false;
+    const emailStr = user.email.toLowerCase().trim();
+    return emailStr === ADMIN_EMAIL || list.map(e => e.toLowerCase().trim()).includes(emailStr);
+  };
+
   // Sync auth state
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(user?.email === ADMIN_EMAIL); // double check
-      }
+      setIsAdmin(checkIfAdmin(user, adminEmails));
     });
     return () => unsub();
-  }, []);
+  }, [adminEmails]);
 
   // Fetch photos
   useEffect(() => {
@@ -176,11 +186,40 @@ export default function AdminPanel() {
       console.error("Error fetching bingo settings snapshot:", error);
     });
 
+    // 5. General settings (Title & Favicon)
+    const unsubGeneral = onSnapshot(doc(db, 'settings', 'general'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.title) {
+          setPageTitle(data.title);
+        }
+        if (data.faviconUrl) {
+          setFaviconUrl(data.faviconUrl);
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching general settings snapshot:", error);
+    });
+
+    // 6. Admin lists
+    const unsubAdmins = onSnapshot(doc(db, 'settings', 'admins'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.emails)) {
+          setAdminEmails(data.emails);
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching admins settings snapshot:", error);
+    });
+
     return () => {
       unsubLock();
       unsubMenu();
       unsubSchedule();
       unsubBingo();
+      unsubGeneral();
+      unsubAdmins();
     };
   }, []);
 
@@ -189,12 +228,13 @@ export default function AdminPanel() {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      if (result.user.email === ADMIN_EMAIL) {
+      const isUserAdmin = checkIfAdmin(result.user, adminEmails);
+      if (isUserAdmin) {
         setIsAdmin(true);
-        alert("Zalogowano pomyślnie jako główny Administrator!");
+        alert(`Zalogowano pomyślnie jako Administrator: ${result.user.email}!`);
       } else {
         setIsAdmin(false);
-        triggerMockPopup("Konto zalogowane, ale nie posiada uprawnień Admina w bazie.\nMożesz testować i symulować zmiany w tym oknie!");
+        triggerMockPopup(`Konto ${result.user.email} zalogowane, ale nie posiada uprawnień Admina w bazie.\nMożesz testować i symulować zmiany w tym oknie!`);
       }
     } catch (err: any) {
       console.error(err);
@@ -221,9 +261,10 @@ export default function AdminPanel() {
   const saveToFirestore = async (settingId: string, data: any) => {
     setSaving(true);
     try {
-      if (!auth.currentUser || auth.currentUser.email !== ADMIN_EMAIL) {
+      const isUserAdmin = checkIfAdmin(auth.currentUser, adminEmails);
+      if (!auth.currentUser || !isUserAdmin) {
         // Simulated local saving in state
-        alert("Symulacja zapisu: Zmiany zostały zastosowane lokalnie w przeglądarce!\nZaloguj się kontem lewkowicz.olaf2@gmail.com, aby zapisać trwale w chmurze.");
+        alert("Symulacja zapisu: Zmiany zostały zastosowane lokalnie w przeglądarce!\nZaloguj się na konto administratora, aby zapisać trwale w chmurze.");
         setSaving(false);
         return;
       }
@@ -231,7 +272,7 @@ export default function AdminPanel() {
       alert("Pomyślnie zapisano zmiany w chmurze Firestore!");
     } catch (err: any) {
       console.error(err);
-      alert(`Błąd zapisu: Brak uprawnień do zapisu w Firestore.\nUpewnij się, że jesteś zalogowany jako ${ADMIN_EMAIL}.`);
+      alert("Błąd zapisu: Brak uprawnień do zapisu w Firestore.");
     } finally {
       setSaving(false);
     }
@@ -342,7 +383,49 @@ export default function AdminPanel() {
     }
   };
 
-  // 5. Gallery Delete / Download
+  // 5. General & Admin settings functions
+  const handleSaveGeneral = () => {
+    saveToFirestore('general', { title: pageTitle.trim(), faviconUrl: faviconUrl.trim() });
+  };
+
+  const handleSaveAdmins = (updatedEmails: string[]) => {
+    saveToFirestore('admins', { emails: updatedEmails });
+  };
+
+  const handleAddAdminEmail = () => {
+    if (!newAdminEmail.trim()) return;
+    const emailToAdd = newAdminEmail.trim().toLowerCase();
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailToAdd)) {
+      alert("Proszę wpisać poprawny adres e-mail.");
+      return;
+    }
+
+    if (emailToAdd === ADMIN_EMAIL) {
+      alert("Główny e-mail administratora jest już na stałe uprawniony.");
+      return;
+    }
+
+    if (adminEmails.map(e => e.toLowerCase().trim()).includes(emailToAdd)) {
+      alert("Ten e-mail już znajduje się na liście administratorów.");
+      return;
+    }
+
+    const updated = [...adminEmails, emailToAdd];
+    setAdminEmails(updated);
+    setNewAdminEmail('');
+    handleSaveAdmins(updated);
+  };
+
+  const handleRemoveAdminEmail = (emailToRemove: string) => {
+    if (!window.confirm(`Czy na pewno chcesz odebrać uprawnienia administratora dla ${emailToRemove}?`)) return;
+    const updated = adminEmails.filter(e => e.toLowerCase().trim() !== emailToRemove.toLowerCase().trim());
+    setAdminEmails(updated);
+    handleSaveAdmins(updated);
+  };
+
+  // 6. Gallery Delete / Download
   const deletePhoto = async (id: string) => {
     if (!window.confirm("Czy na pewno chcesz usunąć to zdjęcie permanentnie z galerii gości?")) return;
     try {
@@ -415,7 +498,7 @@ export default function AdminPanel() {
             {currentUser && isAdmin ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-[#4A5D4E] bg-[#EAEFEA] px-3 py-1.5 rounded-full border border-[#D5E2D5]">
-                  Zalogowano: {ADMIN_EMAIL}
+                  Zalogowano: {currentUser.email}
                 </span>
                 <button 
                   onClick={handleLogout}
@@ -445,7 +528,7 @@ export default function AdminPanel() {
             <div>
               <h3 className="font-serif italic text-lg text-[#8C6F4F]">Tryb symulacji / Brak autoryzacji</h3>
               <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
-                Aby trwale zapisać zmiany w bazie danych Firestore, zaloguj się kontem Google: <strong className="font-mono text-[#4A5D4E]">{ADMIN_EMAIL}</strong>. Bez tego, możesz testować działanie panelu, ale zmiany będą zapisywane tylko lokalnie.
+                Aby trwale zapisać zmiany w bazie danych Firestore, zaloguj się kontem Google z uprawnieniami administratora (np. główny admin: <strong className="font-mono text-[#4A5D4E]">{ADMIN_EMAIL}</strong> lub inny dodany e-mail). Bez tego możesz testować działanie panelu, ale zmiany będą zapisywane tylko lokalnie.
               </p>
             </div>
           </div>
@@ -458,7 +541,8 @@ export default function AdminPanel() {
             { id: 'lock', label: 'Blokada zdjęć', icon: <Clock size={15} /> },
             { id: 'menu', label: 'Karta dań (Menu)', icon: <Utensils size={15} /> },
             { id: 'schedule', label: 'Harmonogram', icon: <Calendar size={15} /> },
-            { id: 'bingo', label: 'Zdjęciowe Bingo', icon: <Grid3X3 size={15} /> }
+            { id: 'bingo', label: 'Zdjęciowe Bingo', icon: <Grid3X3 size={15} /> },
+            { id: 'general', label: 'Ustawienia ogólne & Admini', icon: <Settings size={15} /> }
           ].map(tab => (
             <button
               key={tab.id}
@@ -817,6 +901,139 @@ export default function AdminPanel() {
                 >
                   <Save size={14} /> {saving ? "Zapisuję..." : "Zapisz Wyzwania Bingo"}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: GENERAL CONFIG & ADMINS */}
+          {activeSubTab === 'general' && (
+            <div className="space-y-8 divide-y divide-[#EAE8E2]">
+              {/* Part 1: Page custom details */}
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Konfiguracja Strony</h2>
+                  <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Dostosuj tytuł witryny widoczny w zakładce przeglądarki oraz jej favicon (ikonę strony).</p>
+                </div>
+
+                <div className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                      Tytuł Strony (Browser Title)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-[#EAE8E2] bg-white rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-[#4A5D4E] focus:outline-none transition-all font-serif italic"
+                      placeholder="np. Eliza & Miłosz – Nasza Ślubna Pamiątka"
+                      value={pageTitle}
+                      onChange={(e) => setPageTitle(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                      URL Faviconu (Adres Ikony)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-[#EAE8E2] bg-white rounded-xl px-4 py-3 text-xs focus:ring-1 focus:ring-[#4A5D4E] focus:outline-none transition-all font-mono"
+                      placeholder="https://example.com/favicon.ico lub ścieżka np. /favicon.ico"
+                      value={faviconUrl}
+                      onChange={(e) => setFaviconUrl(e.target.value)}
+                    />
+                    {faviconUrl && (
+                      <div className="mt-3 flex items-center gap-3 bg-[#FAF9F6] p-3 rounded-2xl border border-[#EAE8E2] w-fit">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Podgląd Ikony:</span>
+                        <img
+                          src={faviconUrl}
+                          alt="Favicon preview"
+                          className="w-6 h-6 object-contain rounded bg-white shadow-xs"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={handleSaveGeneral}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 bg-[#4A5D4E] text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-[#3D4D40] transition-colors disabled:opacity-50"
+                    >
+                      <Save size={14} /> {saving ? "Zapisuję..." : "Zapisz Ustawienia Strony"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Part 2: Administrator rights */}
+              <div className="space-y-6 pt-8">
+                <div>
+                  <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Zarządzanie Administratorami</h2>
+                  <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider">
+                    Możesz dodać maile innych administratorów. Osoby te będą mogły logować się przez konto Google i zapisywać zmiany we wszystkich konfiguracjach weselnych.
+                  </p>
+                </div>
+
+                <div className="space-y-4 max-w-xl">
+                  {/* Primary Super Admin (Immutable) */}
+                  <div className="flex items-center justify-between p-4 border border-[#D5E2D5] rounded-2xl bg-[#EAEFEA]/30">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-[#4A5D4E]">{ADMIN_EMAIL}</span>
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400 mt-0.5">Główny Właściciel Ślubu (Zawsze Aktywny)</span>
+                    </div>
+                    <span className="text-[10px] bg-[#4A5D4E] text-white px-2.5 py-1 rounded-full uppercase tracking-wider font-bold">Właściciel</span>
+                  </div>
+
+                  {/* Dynamic extra admins listing */}
+                  <div className="space-y-2">
+                    {adminEmails.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-2">Nie dodano jeszcze żadnych dodatkowych administratorów.</p>
+                    ) : (
+                      adminEmails.map((email) => (
+                        <div key={email} className="flex items-center justify-between p-4 border border-[#EAE8E2] rounded-2xl bg-gray-50">
+                          <span className="text-xs font-medium text-gray-700">{email}</span>
+                          <button
+                            onClick={() => handleRemoveAdminEmail(email)}
+                            className="bg-white hover:bg-red-50 text-red-500 hover:text-red-700 border border-[#EAE8E2] p-2 rounded-xl transition-all"
+                            title="Odbierz uprawnienia"
+                          >
+                            <Trash size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Add form */}
+                  <div className="p-4 border border-[#EAE8E2] rounded-2xl bg-[#FAF9F6] space-y-3">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Dodaj adres e-mail nowego administratora
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        className="flex-1 border border-[#EAE8E2] bg-white rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#4A5D4E] focus:outline-none transition-all font-mono"
+                        placeholder="np. świadek@gmail.com"
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddAdminEmail();
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={handleAddAdminEmail}
+                        className="bg-[#4A5D4E] hover:bg-[#3D4D40] text-white px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1 shrink-0"
+                      >
+                        <Plus size={14} /> Dodaj
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

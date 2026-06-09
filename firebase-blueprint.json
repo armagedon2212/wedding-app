@@ -39,7 +39,7 @@
     },
     "Setting": {
       "title": "Setting",
-      "description": "Dynamic configuration representing photo lock, menu sections, schedule events, or bingo prompts.",
+      "description": "Dynamic configuration representing photo lock, menu sections, schedule events, bingo prompts, general configuration, and admin emails.",
       "type": "object",
       "properties": {
         "unlockTime": { "type": "number", "description": "Epoch timestamp of photo release." },
@@ -54,6 +54,18 @@
         "prompts": {
           "type": "array",
           "description": "9 bingo prompt strings."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the wedding browser application."
+        },
+        "faviconUrl": {
+          "type": "string",
+          "description": "The URL of the pages favicon."
+        },
+        "emails": {
+          "type": "array",
+          "description": "List of emails of other administrators."
         }
       }
     }

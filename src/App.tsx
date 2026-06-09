@@ -9,7 +9,8 @@ import BingoTab from './components/BingoTab';
 import DjView from './components/DjView';
 import AdminPanel from './components/AdminPanel';
 import WelcomeScreen from './components/WelcomeScreen';
-import { initAuth } from './firebase';
+import { initAuth, db } from './firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 function MainApp({ initialTab = 'gallery' }: { initialTab?: string }) {
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -77,6 +78,33 @@ function WelcomeRouter() {
 export default function App() {
   useEffect(() => {
     initAuth().catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'general'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.title) {
+          document.title = data.title;
+        }
+        if (data.faviconUrl) {
+          const links = document.querySelectorAll("link[rel~='icon']");
+          if (links.length > 0) {
+            links.forEach((link: any) => {
+              link.href = data.faviconUrl;
+            });
+          } else {
+            const newLink = document.createElement('link');
+            newLink.rel = 'icon';
+            newLink.href = data.faviconUrl;
+            document.head.appendChild(newLink);
+          }
+        }
+      }
+    }, (error) => {
+      console.error("Error loading general app settings (title/favicon):", error);
+    });
+    return () => unsub();
   }, []);
 
   return (
