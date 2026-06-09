@@ -105,8 +105,30 @@ export default function AdminPanel() {
     return () => unsub();
   }, [adminEmails]);
 
-  // Fetch photos
+  // Fetch admin list independently to compute isAdmin
   useEffect(() => {
+    const unsubAdmins = onSnapshot(doc(db, 'settings', 'admins'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.emails)) {
+          setAdminEmails(data.emails);
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching admins settings snapshot:", error);
+    });
+    return () => unsubAdmins();
+  }, []);
+
+  // Fetch photos only when verified admin code is active
+  useEffect(() => {
+    if (!isAdmin) {
+      setImages([]);
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
     const q = query(collection(db, 'photos'), where('status', '==', 'active'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
@@ -127,10 +149,12 @@ export default function AdminPanel() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin]);
 
-  // Fetch current Firestore configs
+  // Fetch other Firestore configs only when validated
   useEffect(() => {
+    if (!isAdmin) return;
+
     // 1. Lock settings
     const unsubLock = onSnapshot(doc(db, 'settings', 'lock'), (snapshot) => {
       if (snapshot.exists()) {
@@ -201,27 +225,14 @@ export default function AdminPanel() {
       console.error("Error fetching general settings snapshot:", error);
     });
 
-    // 6. Admin lists
-    const unsubAdmins = onSnapshot(doc(db, 'settings', 'admins'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (Array.isArray(data.emails)) {
-          setAdminEmails(data.emails);
-        }
-      }
-    }, (error) => {
-      console.error("Error fetching admins settings snapshot:", error);
-    });
-
     return () => {
       unsubLock();
       unsubMenu();
       unsubSchedule();
       unsubBingo();
       unsubGeneral();
-      unsubAdmins();
     };
-  }, []);
+  }, [isAdmin]);
 
   // Auth Handlers
   const handleGoogleLogin = async () => {
@@ -234,7 +245,7 @@ export default function AdminPanel() {
         alert(`Zalogowano pomyślnie jako Administrator: ${result.user.email}!`);
       } else {
         setIsAdmin(false);
-        triggerMockPopup(`Konto ${result.user.email} zalogowane, ale nie posiada uprawnień Admina w bazie.\nMożesz testować i symulować zmiany w tym oknie!`);
+        alert(`Konto ${result.user.email} nie posiada uprawnień administratora.`);
       }
     } catch (err: any) {
       console.error(err);
@@ -252,19 +263,13 @@ export default function AdminPanel() {
     }
   };
 
-  // Helper trigger informative popup messages
-  const triggerMockPopup = (msg: string) => {
-    alert(msg);
-  };
-
-  // Save Config to Firestore (with standard failover info)
+  // Save Config to Firestore
   const saveToFirestore = async (settingId: string, data: any) => {
     setSaving(true);
     try {
       const isUserAdmin = checkIfAdmin(auth.currentUser, adminEmails);
       if (!auth.currentUser || !isUserAdmin) {
-        // Simulated local saving in state
-        alert("Symulacja zapisu: Zmiany zostały zastosowane lokalnie w przeglądarce!\nZaloguj się na konto administratora, aby zapisać trwale w chmurze.");
+        alert("Błąd: Brak uprawnień do zapisu.");
         setSaving(false);
         return;
       }
@@ -508,6 +513,19 @@ export default function AdminPanel() {
                   <LogOut size={16} />
                 </button>
               </div>
+            ) : currentUser ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-200">
+                  Zalogowano: {currentUser.email} (Brak uprawnień)
+                </span>
+                <button 
+                  onClick={handleLogout}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full transition-colors"
+                  title="Wyloguj się"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
             ) : (
               <button 
                 onClick={handleGoogleLogin}
@@ -519,48 +537,84 @@ export default function AdminPanel() {
           </div>
         </header>
 
-        {/* Warning card for non-admin state */}
-        {!isAdmin && (
-          <div className="bg-[#FAF6EE] border border-[#F3E7D5] rounded-3xl p-5 mb-8 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-[#FAF0D9] flex items-center justify-center shrink-0">
-              <AlertTriangle className="text-[#C5A27D]" size={20} />
+        {!isAdmin ? (
+          <div className="bg-white rounded-3xl border border-[#EAE8E2] p-8 max-w-md mx-auto text-center shadow-xs space-y-6 mt-12">
+            <div className="w-16 h-16 bg-[#F5F2EB] rounded-full flex items-center justify-center mx-auto text-[#C5A27D]">
+              <Lock size={28} />
             </div>
-            <div>
-              <h3 className="font-serif italic text-lg text-[#8C6F4F]">Tryb symulacji / Brak autoryzacji</h3>
-              <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
-                Aby trwale zapisać zmiany w bazie danych Firestore, zaloguj się kontem Google z uprawnieniami administratora (np. główny admin: <strong className="font-mono text-[#4A5D4E]">{ADMIN_EMAIL}</strong> lub inny dodany e-mail). Bez tego możesz testować działanie panelu, ale zmiany będą zapisywane tylko lokalnie.
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Dostęp Zastrzeżony</h2>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Tylko autoryzowane konta administratorów mają dostęp do tego panelu.
+                Zaloguj się przy użyciu konta Google, aby zarządzać zdjęciami, menu, harmonogramem i innymi elementami uroczystości.
               </p>
             </div>
+
+            {currentUser ? (
+              <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 text-left space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
+                  <div>
+                    <h4 className="text-xs font-bold text-red-800">Brak uprawnień</h4>
+                    <p className="text-[11px] text-red-700/80 mt-0.5">
+                      Konto <strong className="font-mono">{currentUser.email}</strong> nie znajduje się na liście administratorów. Poproś głównego administratora o dodanie Twojego adresu e-mail.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-center bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Wyloguj się
+                  </button>
+                  <button
+                    onClick={handleGoogleLogin}
+                    className="w-full text-center bg-[#4A5D4E] hover:bg-[#3D4D40] text-white py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Inne konto
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full inline-flex items-center justify-center gap-2 bg-[#4A5D4E] hover:bg-[#3D4D40] text-white py-3.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+              >
+                <LogIn size={15} /> Zaloguj się przez Google
+              </button>
+            )}
           </div>
-        )}
+        ) : (
+          <>
+            {/* Dynamic Navigation Rails */}
+            <div className="flex overflow-x-auto gap-2 pb-3 mb-8 border-b border-[#EAE8E2] scrollbar-none">
+              {[
+                { id: 'photos', label: 'Galeria & ZIP', icon: <ImageIcon size={15} /> },
+                { id: 'lock', label: 'Blokada zdjęć', icon: <Clock size={15} /> },
+                { id: 'menu', label: 'Karta dań (Menu)', icon: <Utensils size={15} /> },
+                { id: 'schedule', label: 'Harmonogram', icon: <Calendar size={15} /> },
+                { id: 'bingo', label: 'Zdjęciowe Bingo', icon: <Grid3X3 size={15} /> },
+                { id: 'general', label: 'Ustawienia ogólne & Admini', icon: <Settings size={15} /> }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSubTab(tab.id as any)}
+                  className={`flex items-center gap-2 shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full transition-all cursor-pointer ${
+                    activeSubTab === tab.id 
+                      ? 'bg-[#4A5D4E] text-white' 
+                      : 'bg-white border border-[#EAE8E2] text-[#8C8C8C] hover:border-[#4A5D4E] hover:text-[#4A5D4E]'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Dynamic Navigation Rails */}
-        <div className="flex overflow-x-auto gap-2 pb-3 mb-8 border-b border-[#EAE8E2] scrollbar-none">
-          {[
-            { id: 'photos', label: 'Galeria & ZIP', icon: <ImageIcon size={15} /> },
-            { id: 'lock', label: 'Blokada zdjęć', icon: <Clock size={15} /> },
-            { id: 'menu', label: 'Karta dań (Menu)', icon: <Utensils size={15} /> },
-            { id: 'schedule', label: 'Harmonogram', icon: <Calendar size={15} /> },
-            { id: 'bingo', label: 'Zdjęciowe Bingo', icon: <Grid3X3 size={15} /> },
-            { id: 'general', label: 'Ustawienia ogólne & Admini', icon: <Settings size={15} /> }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as any)}
-              className={`flex items-center gap-2 shrink-0 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full transition-all cursor-pointer ${
-                activeSubTab === tab.id 
-                  ? 'bg-[#4A5D4E] text-white' 
-                  : 'bg-white border border-[#EAE8E2] text-[#8C8C8C] hover:border-[#4A5D4E] hover:text-[#4A5D4E]'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Workspace content fields */}
-        <div className="bg-white rounded-3xl border border-[#EAE8E2] p-5 sm:p-8 shadow-xs">
+            {/* Workspace content fields */}
+            <div className="bg-white rounded-3xl border border-[#EAE8E2] p-5 sm:p-8 shadow-xs">
           
           {/* TAB 1: PHOTOS */}
           {activeSubTab === 'photos' && (
@@ -1039,6 +1093,8 @@ export default function AdminPanel() {
           )}
 
         </div>
+        </>
+        )}
       </div>
     </div>
   );
