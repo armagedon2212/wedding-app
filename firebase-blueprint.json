@@ -36,6 +36,26 @@
         "value": { "type": "number", "enum": [1, -1] }
       },
       "required": ["userId", "value"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Dynamic configuration representing photo lock, menu sections, schedule events, or bingo prompts.",
+      "type": "object",
+      "properties": {
+        "unlockTime": { "type": "number", "description": "Epoch timestamp of photo release." },
+        "sections": {
+          "type": "array",
+          "description": "Menu categories with dishes."
+        },
+        "events": {
+          "type": "array",
+          "description": "Wedding events schedule list."
+        },
+        "prompts": {
+          "type": "array",
+          "description": "9 bingo prompt strings."
+        }
+      }
     }
   },
   "firestore": {
@@ -50,6 +70,10 @@
     "songs/{songId}/votes": {
       "schema": "Vote",
       "description": "Votes for a song to ensure users can only vote once."
+    },
+    "settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Dynamic configurable variables like unlock duration, menu, schedule, and bingo."
     }
   }
 }

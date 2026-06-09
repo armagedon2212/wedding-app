@@ -1,7 +1,22 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+
+const DEFAULT_BINGO: string[] = [
+  "Zrób selfie z Panem Młodym",
+  "Uchwyć uśmiech Pani Młodej",
+  "Sfotografuj kogoś kto płacze ze wzruszenia",
+  "Złap na zdjęciu toasty i wznoszone kieliszki",
+  "Uwiecznij pierwszy taniec",
+  "Zrób zdjęcie najgorszemu tancerzowi",
+  "Sfotografuj pocałunek kogoś innego niż Młodzi",
+  "Selfie z kimś, kogo dzisiaj poznałeś",
+  "Uchwyć moment krojenia tortu"
+];
 
 export default function BingoTab() {
+  const [fields, setFields] = useState<string[]>(DEFAULT_BINGO);
   const [marked, setMarked] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('wedding_photo_bingo');
     return saved ? JSON.parse(saved) : {};
@@ -11,17 +26,24 @@ export default function BingoTab() {
     localStorage.setItem('wedding_photo_bingo', JSON.stringify(marked));
   }, [marked]);
 
-  const fields = [
-    "Zrób selfie z Panem Młodym",
-    "Uchwyć uśmiech Pani Młodej",
-    "Sfotografuj kogoś kto płacze ze wzruszenia",
-    "Złap na zdjęciu toasty i wznoszone kieliszki",
-    "Uwiecznij pierwszy taniec",
-    "Zrób zdjęcie najgorszemu tancerzowi",
-    "Sfotografuj pocałunek kogoś innego niż Młodzi",
-    "Selfie z kimś, kogo dzisiaj poznałeś",
-    "Uchwyć moment krojenia tortu"
-  ];
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'bingo'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.prompts)) {
+          // Fill exact 9 tiles
+          const loaded = [...data.prompts];
+          while (loaded.length < 9) {
+            loaded.push(`Pole ${loaded.length + 1}`);
+          }
+          setFields(loaded.slice(0, 9));
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching bingo settings:", error);
+    });
+    return () => unsub();
+  }, []);
 
   const toggleMark = (index: number) => {
     setMarked(prev => ({

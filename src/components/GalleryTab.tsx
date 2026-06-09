@@ -13,8 +13,8 @@ interface PhotoData {
   uploaderId?: string;
 }
 
-// Wedding unlocks on Saturday, July 4th at 12:00 PM
-const WEDDING_UNLOCK_TIME = new Date('2026-07-04T12:00:00').getTime();
+// Wedding unlocks on Saturday, July 4th at 12:00 PM (fallback default)
+const DEFAULT_WEDDING_UNLOCK_TIME = new Date('2026-07-04T12:00:00').getTime();
 
 // Custom Animated Counter component for that smooth pop-roll scale animation on upload!
 function AnimatedCounter({ value }: { value: number }) {
@@ -46,9 +46,26 @@ export default function GalleryTab() {
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
   
   // Real-time checks for the release countdown
-  const [isUnlocked, setIsUnlocked] = useState(Date.now() >= WEDDING_UNLOCK_TIME);
+  const [unlockTime, setUnlockTime] = useState<number>(DEFAULT_WEDDING_UNLOCK_TIME);
+  const [isUnlocked, setIsUnlocked] = useState(Date.now() >= DEFAULT_WEDDING_UNLOCK_TIME);
   const [countdownText, setCountdownText] = useState('');
   const [showLockDetails, setShowLockDetails] = useState(false);
+
+  // Subscribe to dynamic settings
+  useEffect(() => {
+    const unsubLock = onSnapshot(doc(db, 'settings', 'lock'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (typeof data.unlockTime === 'number') {
+          setUnlockTime(data.unlockTime);
+          setIsUnlocked(Date.now() >= data.unlockTime);
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching lock settings snapshot in gallery:", error);
+    });
+    return () => unsubLock();
+  }, []);
 
   useEffect(() => {
     const unsubAuth = auth.onAuthStateChanged((user) => {
@@ -61,13 +78,13 @@ export default function GalleryTab() {
   useEffect(() => {
     const updateCountdown = () => {
       const now = Date.now();
-      if (now >= WEDDING_UNLOCK_TIME) {
+      if (now >= unlockTime) {
         setIsUnlocked(true);
         setCountdownText('');
         return;
       }
       setIsUnlocked(false);
-      const diff = WEDDING_UNLOCK_TIME - now;
+      const diff = unlockTime - now;
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -80,10 +97,9 @@ export default function GalleryTab() {
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 30000); // refresh every 30s
+    const interval = setInterval(updateCountdown, 10000); // refresh every 10s
     return () => clearInterval(interval);
-  }, []);
-
+  }, [unlockTime]);
   // Filter out which media is rendered depending on photos/videos tab
   const filteredMedia = images.filter(img => 
     activeTab === 'photos' 
@@ -173,6 +189,8 @@ export default function GalleryTab() {
       });
       
       setImages(fetched);
+    }, (error) => {
+      console.error("Error fetching photos snapshot in gallery:", error);
     });
     return () => unsubscribe();
   }, []);

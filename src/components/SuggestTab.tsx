@@ -43,6 +43,8 @@ export default function SuggestTab() {
            }
          });
       }
+    }, (error) => {
+      console.error("Error fetching songs in suggest tab:", error);
     });
     return () => unsubscribe();
   }, []);

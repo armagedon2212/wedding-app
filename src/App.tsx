@@ -7,7 +7,7 @@ import MenuTab from './components/MenuTab';
 import SuggestTab from './components/SuggestTab';
 import BingoTab from './components/BingoTab';
 import DjView from './components/DjView';
-import AdminPhotos from './components/AdminPhotos';
+import AdminPanel from './components/AdminPanel';
 import WelcomeScreen from './components/WelcomeScreen';
 import { initAuth } from './firebase';
 
@@ -84,7 +84,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<WelcomeRouter />} />
         <Route path="/dj" element={<DjView />} />
-        <Route path="/admin/photos" element={<AdminPhotos />} />
+        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin/photos" element={<AdminPanel />} />
       </Routes>
     </BrowserRouter>
   );

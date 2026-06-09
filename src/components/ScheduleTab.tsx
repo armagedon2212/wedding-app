@@ -1,15 +1,40 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+
+interface ScheduleEvent {
+  time: string;
+  title: string;
+  desc: string;
+}
+
+const DEFAULT_SCHEDULE: ScheduleEvent[] = [
+  { time: '15:00', title: 'Ceremonia Ślubna', desc: 'Kościół pw. św. Anny' },
+  { time: '16:30', title: 'Życzenia i Toast', desc: 'Przed Salą Bankietową' },
+  { time: '17:00', title: 'Uroczysty Obiad', desc: 'Czas na pyszne jedzenie!' },
+  { time: '18:30', title: 'Pierwszy Taniec', desc: 'Zapraszamy na parkiet' },
+  { time: '20:30', title: 'Tort Weselny', desc: 'Słodka niespodzianka na środku sali' },
+  { time: '22:00', title: 'Zabawa z DJ-em', desc: 'Parkiet płonie w rytm największych hitów' },
+  { time: '00:00', title: 'Oczepiny', desc: 'Tradycyjne polskie zabawy weselne' },
+];
 
 export default function ScheduleTab() {
-  const events = [
-    { time: '15:00', title: 'Ceremonia Ślubna', desc: 'Kościół pw. św. Anny' },
-    { time: '16:30', title: 'Życzenia i Toast', desc: 'Przed Salą Bankietową' },
-    { time: '17:00', title: 'Uroczysty Obiad', desc: 'Czas na pyszne jedzenie!' },
-    { time: '18:30', title: 'Pierwszy Taniec', desc: 'Zapraszamy na parkiet' },
-    { time: '20:30', title: 'Tort Weselny', desc: 'Słodka niespodzianka na środku sali' },
-    { time: '22:00', title: 'Zabawa z DJ-em', desc: 'Parkiet płonie w rytm największych hitów' },
-    { time: '00:00', title: 'Oczepiny', desc: 'Tradycyjne polskie zabawy weselne' },
-  ];
+  const [events, setEvents] = useState<ScheduleEvent[]>(DEFAULT_SCHEDULE);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'schedule'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.events)) {
+          setEvents(data.events);
+        }
+      }
+    }, (error) => {
+      console.error("Error fetching schedule settings:", error);
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 pt-10 pb-12 flex flex-col h-full overflow-y-auto">

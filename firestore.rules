@@ -1,3 +1,4 @@
+// firestore.rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -93,6 +94,13 @@ service cloud.firestore {
                        incoming().value in [1, -1];
                        
       allow delete: if isAnonymousOrSignedIn() && userId == request.auth.uid;
+    }
+    
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAnonymousOrSignedIn() && 
+                      request.auth.token.email == "lewkowicz.olaf2@gmail.com" && 
+                      request.auth.token.email_verified == true;
     }
   }
 }

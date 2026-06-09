@@ -25,6 +25,8 @@ export default function DjView() {
       // Sort locally
       fetched.sort((a, b) => b.voteCount - a.voteCount);
       setSongs(fetched);
+    }, (error) => {
+      console.error("Error fetching songs in DJ view:", error);
     });
     return () => unsubscribe();
   }, []);
