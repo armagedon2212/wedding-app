@@ -9,7 +9,7 @@ import { db, auth, storage } from '../firebase';
 import { 
   collection, doc, getDoc, setDoc, query, onSnapshot, where, updateDoc 
 } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -89,6 +89,23 @@ export default function AdminPanel() {
   // Admin list configuration
   const [adminEmails, setAdminEmails] = useState<string[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
+  
+  // Email Auth & Invite states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteEmailInput, setInviteEmailInput] = useState('');
+
+  // Sprawdzanie czy mamy link z zaproszeniem w URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    if (invite) {
+      setLoginEmail(invite);
+      setIsRegisterMode(true);
+    }
+  }, []);
 
   const checkIfAdmin = (user: any, list: string[]) => {
     if (!user || !user.email) return false;
@@ -235,7 +252,89 @@ export default function AdminPanel() {
   }, [isAdmin]);
 
   // Auth Handlers
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let result;
+      if (isRegisterMode) {
+        result = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
+        alert("Konto zostało pomyślnie utworzone!");
+      } else {
+        result = await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+      }
+      
+      const isUserAdmin = checkIfAdmin(result.user, adminEmails);
+      if (isUserAdmin) {
+        setIsAdmin(true);
+        if (!isRegisterMode) alert(`Zalogowano pomyślnie jako Administrator: ${result.user.email}!`);
+      } else {
+        setIsAdmin(false);
+        alert(`Konto ${result.user.email} nie posiada uprawnień administratora.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') {
+        alert("To konto już istnieje. Przełącz się na logowanie.");
+        setIsRegisterMode(false);
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        alert("Nieprawidłowy email lub hasło.");
+      } else {
+        alert("Błąd logowania: " + err.message);
+      }
+    }
+  };
+
+  const handleInviteUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmailInput) return;
+    setIsInviting(true);
+    
+    try {
+      // 1. Dodaj email do listy administratorów jeśli go tam nie ma
+      const updatedList = [...adminEmails, inviteEmailInput];
+      if (!adminEmails.includes(inviteEmailInput)) {
+        await saveToFirestore('admins', { emails: updatedList });
+        setAdminEmails(updatedList);
+      }
+
+      // 2. Wyślij zaproszenie (jeśli to środowisko ma backend to użyje /api/invite)
+      const baseUrl = window.location.origin;
+      const inviteUrl = `${baseUrl}/admin?invite=${encodeURIComponent(inviteEmailInput)}`;
+      
+      const response = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmailInput, inviteUrl })
+      });
+      
+      if (!response.ok) {
+        throw new Error("Nie udało się wysłać emaila z zaproszeniem. Skonfiguruj backend.");
+      }
+      
+      alert(`Wysłano zaproszenie na: ${inviteEmailInput}`);
+      setInviteEmailInput('');
+    } catch (err: any) {
+      console.error(err);
+      // Fallback jeśli API nie działa - dodaliśmy do adminów, skopiujmy link:
+      const baseUrl = window.location.origin;
+      const inviteUrl = `${baseUrl}/admin?invite=${encodeURIComponent(inviteEmailInput)}`;
+      prompt(`Użytkownik dodany do uprawnień, ale nie udało się wysłać e-maila automatycznie. Wyślij mu ten link ręcznie:`, inviteUrl);
+      setInviteEmailInput('');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
+    // Sprawdź czy to wbudowana przeglądarka (Facebook/Messenger/Instagram)
+    const ua = navigator.userAgent || navigator.vendor;
+    const isWebview = ua.includes('FBAN') || ua.includes('FBAV') || ua.includes('Instagram') || ua.includes('Messenger');
+    
+    if (isWebview) {
+      alert("UWAGA: Facebook/Messenger blokuje logowanie Google ze względów bezpieczeństwa.\n\nAby się zalogować:\n1. Kliknij ikonę 3 kropek (zazwyczaj w rogu ekranu)\n2. Wybierz 'Otwórz w przeglądarce' lub 'Otwórz w Safari/Chrome'\n3. Spróbuj zalogować się ponownie.");
+      return;
+    }
+
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -527,12 +626,14 @@ export default function AdminPanel() {
                 </button>
               </div>
             ) : (
-              <button 
-                onClick={handleGoogleLogin}
-                className="inline-flex items-center gap-2 bg-[#4A5D4E] text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-[#3D4D40] transition-colors active:scale-95"
-              >
-                <LogIn size={15} /> Logowanie Google ({ADMIN_EMAIL})
-              </button>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => setIsRegisterMode(false)}
+                  className="inline-flex items-center gap-2 bg-[#4A5D4E] text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-[#3D4D40] transition-colors active:scale-95"
+                >
+                  <LogIn size={15} /> Zaloguj
+                </button>
+              </div>
             )}
           </div>
         </header>
@@ -547,7 +648,7 @@ export default function AdminPanel() {
               <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Dostęp Zastrzeżony</h2>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Tylko autoryzowane konta administratorów mają dostęp do tego panelu.
-                Zaloguj się przy użyciu konta Google, aby zarządzać zdjęciami, menu, harmonogramem i innymi elementami uroczystości.
+                Zaloguj się przy użyciu adresu e-mail, aby zarządzać zdjęciami, menu, harmonogramem i innymi elementami uroczystości.
               </p>
             </div>
 
@@ -570,7 +671,7 @@ export default function AdminPanel() {
                     Wyloguj się
                   </button>
                   <button
-                    onClick={handleGoogleLogin}
+                    onClick={() => { handleLogout(); setIsRegisterMode(false); }}
                     className="w-full text-center bg-[#4A5D4E] hover:bg-[#3D4D40] text-white py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
                   >
                     Inne konto
@@ -578,12 +679,62 @@ export default function AdminPanel() {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={handleGoogleLogin}
-                className="w-full inline-flex items-center justify-center gap-2 bg-[#4A5D4E] hover:bg-[#3D4D40] text-white py-3.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
-              >
-                <LogIn size={15} /> Zaloguj się przez Google
-              </button>
+              <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Adres E-mail</label>
+                  <input
+                    type="email"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="w-full bg-[#FAF6EE] border border-[#EAE8E2] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A27D]/50 transition-all"
+                    placeholder="Wpisz swój e-mail"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Hasło</label>
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full bg-[#FAF6EE] border border-[#EAE8E2] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A27D]/50 transition-all"
+                    placeholder="Wpisz hasło"
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-[#4A5D4E] hover:bg-[#3D4D40] text-white py-3.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+                >
+                  <LogIn size={15} /> {isRegisterMode ? 'Utwórz konto' : 'Zaloguj się'}
+                </button>
+                
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsRegisterMode(!isRegisterMode)}
+                    className="text-xs text-[#C5A27D] hover:text-[#4A5D4E] font-medium transition-colors"
+                  >
+                    {isRegisterMode ? 'Masz już konto? Zaloguj się' : 'Nie masz konta? Zarejestruj się'}
+                  </button>
+                </div>
+                
+                <div className="relative flex items-center py-2">
+                  <div className="flex-grow border-t border-[#EAE8E2]"></div>
+                  <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">lub</span>
+                  <div className="flex-grow border-t border-[#EAE8E2]"></div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 border border-[#EAE8E2] text-gray-700 py-3.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm"
+                >
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
+                  Zaloguj przez Google
+                </button>
+              </form>
             )}
           </div>
         ) : (
@@ -1060,33 +1211,30 @@ export default function AdminPanel() {
                     )}
                   </div>
 
-                  {/* Add form */}
-                  <div className="p-4 border border-[#EAE8E2] rounded-2xl bg-[#FAF9F6] space-y-3">
+                  {/* Add / Invite form */}
+                  <form onSubmit={handleInviteUser} className="p-4 border border-[#EAE8E2] rounded-2xl bg-[#FAF9F6] space-y-3">
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                      Dodaj adres e-mail nowego administratora
+                      Zaproś e-mailem (wyślemy link)
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="email"
+                        required
                         className="flex-1 border border-[#EAE8E2] bg-white rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#4A5D4E] focus:outline-none transition-all font-mono"
-                        placeholder="np. świadek@gmail.com"
-                        value={newAdminEmail}
-                        onChange={(e) => setNewAdminEmail(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddAdminEmail();
-                          }
-                        }}
+                        placeholder="np. mama@gmail.com"
+                        value={inviteEmailInput}
+                        onChange={(e) => setInviteEmailInput(e.target.value)}
                       />
                       <button
-                        onClick={handleAddAdminEmail}
-                        className="bg-[#4A5D4E] hover:bg-[#3D4D40] text-white px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1 shrink-0"
+                        type="submit"
+                        disabled={isInviting}
+                        className="bg-[#4A5D4E] hover:bg-[#3D4D40] disabled:bg-[#8C8C8C] text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-2 shrink-0"
                       >
-                        <Plus size={14} /> Dodaj
+                        {isInviting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} 
+                        {isInviting ? 'Wysyłanie...' : 'Wyślij Zaproszenie'}
                       </button>
                     </div>
-                  </div>
+                  </form>
                 </div>
               </div>
             </div>

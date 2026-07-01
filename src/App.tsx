@@ -86,6 +86,23 @@ export default function App() {
         const data = snapshot.data();
         if (data.title) {
           document.title = data.title;
+          
+          // Zaktualizuj title dla SEO / pwa / mobile podglądu (gdzie JS jest obsługiwany)
+          let ogTitle = document.querySelector("meta[property='og:title']");
+          if (!ogTitle) {
+            ogTitle = document.createElement('meta');
+            ogTitle.setAttribute('property', 'og:title');
+            document.head.appendChild(ogTitle);
+          }
+          ogTitle.setAttribute('content', data.title);
+
+          let appleTitle = document.querySelector("meta[name='apple-mobile-web-app-title']");
+          if (!appleTitle) {
+            appleTitle = document.createElement('meta');
+            appleTitle.setAttribute('name', 'apple-mobile-web-app-title');
+            document.head.appendChild(appleTitle);
+          }
+          appleTitle.setAttribute('content', data.title);
         }
         if (data.faviconUrl) {
           const links = document.querySelectorAll("link[rel~='icon']");
