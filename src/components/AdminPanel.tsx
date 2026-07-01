@@ -98,6 +98,22 @@ export default function AdminPanel() {
   const [isInviting, setIsInviting] = useState(false);
   const [inviteEmailInput, setInviteEmailInput] = useState('');
   const [isAuthLoaded, setIsAuthLoaded] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    console.log("Toast message:", msg);
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 8000);
+  };
+
+  useEffect(() => {
+    window.alert = (msg) => showToast(msg);
+    window.confirm = () => true;
+    window.prompt = (msg, val) => {
+      showToast(msg + (val ? " " + val : ""));
+      return null;
+    };
+  }, []);
 
   // Sprawdzanie czy mamy link z zaproszeniem w URL
   useEffect(() => {
@@ -589,6 +605,11 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] pb-12">
+      {toastMessage && (
+        <div className="fixed top-20 right-4 z-50 bg-[#4A5D4E] text-white px-4 py-3 rounded-xl shadow-lg max-w-xs transition-all">
+          <p className="text-xs font-medium break-words">{toastMessage}</p>
+        </div>
+      )}
       {/* Upper Navigation Bar */}
       <nav className="bg-white border-b border-[#EAE8E2] sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
