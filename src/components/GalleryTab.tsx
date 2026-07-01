@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { db, storage, auth } from '../firebase';
 import { collection, addDoc, query, onSnapshot, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { processOfflineQueue, addOfflineUpload } from '../lib/offlineUploader';
 
 interface PhotoData {
   id: string;
@@ -72,6 +73,18 @@ export default function GalleryTab() {
       setCurrentUser(user);
     });
     return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      processOfflineQueue();
+    };
+    window.addEventListener('online', handleOnline);
+    // process on mount if online
+    if (navigator.onLine) {
+      processOfflineQueue();
+    }
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   // Countdown timer loop
@@ -175,7 +188,7 @@ export default function GalleryTab() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'photos'), where('status', '==', 'active'));
+    const q = query(collection(db, 'photos'), where('status', 'in', ['active', 'offline']));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -318,6 +331,21 @@ export default function GalleryTab() {
           }
           
           const fileName = `${Date.now()}_${file.name}`;
+          
+          if (!navigator.onLine) {
+            // Offline queueing
+            const docRef = await addDoc(collection(db, 'photos'), {
+              url: thumbnailBase64, // temporary fallback
+              thumbnailUrl: thumbnailBase64,
+              mediaType: isVideo ? 'video' : 'image',
+              createdAt: serverTimestamp(),
+              status: 'offline', // status as offline
+              uploaderId: currentUser.uid
+            });
+            await addOfflineUpload(docRef.id, file, fileName);
+            continue;
+          }
+
           const storageRef = ref(storage, `photos/${fileName}`);
           const uploadTask = uploadBytesResumable(storageRef, file);
           

@@ -117,10 +117,14 @@ export default function AdminPanel() {
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
-      setIsAdmin(checkIfAdmin(user, adminEmails));
     });
     return () => unsub();
-  }, [adminEmails]);
+  }, []);
+
+  // Update isAdmin when currentUser or adminEmails changes
+  useEffect(() => {
+    setIsAdmin(checkIfAdmin(currentUser, adminEmails));
+  }, [currentUser, adminEmails]);
 
   // Fetch admin list independently to compute isAdmin
   useEffect(() => {
@@ -146,7 +150,7 @@ export default function AdminPanel() {
     }
     
     setLoading(true);
-    const q = query(collection(db, 'photos'), where('status', '==', 'active'));
+    const q = query(collection(db, 'photos'), where('status', 'in', ['active', 'offline']));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
