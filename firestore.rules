@@ -12,11 +12,18 @@ service cloud.firestore {
     function isAnonymousOrSignedIn() { return request.auth != null; }
     function isAdmin() { 
       return request.auth != null && 
+             request.auth.token != null &&
+             request.auth.token.email != null &&
              (
                request.auth.token.email == "lewkowicz.olaf2@gmail.com" ||
+               request.auth.token.email.lower() == "lewkowicz.olaf2@gmail.com" ||
                (
                  exists(/databases/$(database)/documents/settings/admins) &&
-                 request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.emails
+                 'emails' in get(/databases/$(database)/documents/settings/admins).data &&
+                 (
+                   request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.emails ||
+                   request.auth.token.email.lower() in get(/databases/$(database)/documents/settings/admins).data.emails
+                 )
                )
              ); 
     }
