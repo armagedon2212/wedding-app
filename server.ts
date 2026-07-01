@@ -48,7 +48,7 @@ async function startServer() {
       `;
 
       const data = await resend.emails.send({
-        from: "Zaproszenie Ślubne <onboarding@resend.dev>",
+        from: "Zaproszenie Ślubne <zaproszenie@miloszeliza.pl>",
         to: [email],
         subject: "Zaproszenie do Panelu Ślubnego - Eliza & Miłosz",
         html: htmlTemplate,

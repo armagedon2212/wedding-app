@@ -17,14 +17,24 @@ export const auth = getAuth(app);
 export const storage = getStorage(app);
 
 // Simple auth wrapper
-export const initAuth = async () => {
-  try {
-    const userCredential = await signInAnonymously(auth);
-    return userCredential.user;
-  } catch (error: any) {
-    console.error("Auth error", error);
-    if (error.code === 'auth/admin-restricted-operation') {
-      console.warn("Logowanie anonimowe jest wyłączone w Firebase. Włącz je w konsoli, aby goście mogli wrzucać zdjęcia bez konta Google.");
-    }
-  }
+export const initAuth = () => {
+  return new Promise((resolve, reject) => {
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      unsub();
+      if (user) {
+        resolve(user);
+      } else {
+        try {
+          const userCredential = await signInAnonymously(auth);
+          resolve(userCredential.user);
+        } catch (error: any) {
+          console.error("Auth error", error);
+          if (error.code === 'auth/admin-restricted-operation') {
+            console.warn("Logowanie anonimowe jest wyłączone w Firebase. Włącz je w konsoli, aby goście mogli wrzucać zdjęcia bez konta Google.");
+          }
+          resolve(null);
+        }
+      }
+    }, reject);
+  });
 };

@@ -9,7 +9,7 @@ import { db, auth, storage } from '../firebase';
 import { 
   collection, doc, getDoc, setDoc, query, onSnapshot, where, updateDoc 
 } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -88,6 +88,7 @@ export default function AdminPanel() {
 
   // Admin list configuration
   const [adminEmails, setAdminEmails] = useState<string[]>([]);
+  const [isAdminsLoaded, setIsAdminsLoaded] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   
   // Email Auth & Invite states
@@ -96,6 +97,7 @@ export default function AdminPanel() {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const [inviteEmailInput, setInviteEmailInput] = useState('');
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
 
   // Sprawdzanie czy mamy link z zaproszeniem w URL
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function AdminPanel() {
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
+      setIsAuthLoaded(true);
     });
     return () => unsub();
   }, []);
@@ -135,8 +138,10 @@ export default function AdminPanel() {
           setAdminEmails(data.emails);
         }
       }
+      setIsAdminsLoaded(true);
     }, (error) => {
       console.error("Error fetching admins settings snapshot:", error);
+      setIsAdminsLoaded(true);
     });
     return () => unsubAdmins();
   }, []);
@@ -360,6 +365,7 @@ export default function AdminPanel() {
     try {
       await signOut(auth);
       setIsAdmin(false);
+      await signInAnonymously(auth); // Re-authenticate anonymously for guests
       alert("Wylogowano z panelu.");
     } catch (err: any) {
       console.error(err);
@@ -573,6 +579,14 @@ export default function AdminPanel() {
     }
   };
 
+  if (!isAuthLoaded || !isAdminsLoaded) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#4A5D4E] animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF9F6] pb-12">
       {/* Upper Navigation Bar */}
@@ -616,7 +630,7 @@ export default function AdminPanel() {
                   <LogOut size={16} />
                 </button>
               </div>
-            ) : currentUser ? (
+            ) : currentUser && !currentUser.isAnonymous ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-200">
                   Zalogowano: {currentUser.email} (Brak uprawnień)
@@ -656,7 +670,7 @@ export default function AdminPanel() {
               </p>
             </div>
 
-            {currentUser ? (
+            {currentUser && !currentUser.isAnonymous ? (
               <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 text-left space-y-3">
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
