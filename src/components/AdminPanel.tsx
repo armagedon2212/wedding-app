@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Download, Loader2, ArrowLeft, Play, Film, Clock, Lock, Unlock, 
   Utensils, Calendar, Grid3X3, Image as ImageIcon, Save, Trash2, 
-  Plus, Edit, Check, RotateCcw, AlertTriangle, LogIn, LogOut, Trash, Settings
+  Plus, Edit, Check, RotateCcw, AlertTriangle, LogIn, LogOut, Trash, Settings,
+  BarChart2, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth, storage } from '../firebase';
@@ -59,7 +60,7 @@ export default function AdminPanel() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'lock' | 'menu' | 'schedule' | 'bingo' | 'general'>('photos');
+  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'lock' | 'menu' | 'schedule' | 'bingo' | 'general' | 'stats'>('photos');
 
   // Loaders
   const [loading, setLoading] = useState(true);
@@ -782,6 +783,7 @@ export default function AdminPanel() {
             <div className="flex overflow-x-auto gap-2 pb-3 mb-8 border-b border-[#EAE8E2] scrollbar-none">
               {[
                 { id: 'photos', label: 'Galeria & ZIP', icon: <ImageIcon size={15} /> },
+                { id: 'stats', label: 'Statystyki', icon: <BarChart2 size={15} /> },
                 { id: 'lock', label: 'Blokada zdjęć', icon: <Clock size={15} /> },
                 { id: 'menu', label: 'Karta dań (Menu)', icon: <Utensils size={15} /> },
                 { id: 'schedule', label: 'Harmonogram', icon: <Calendar size={15} /> },
@@ -806,6 +808,69 @@ export default function AdminPanel() {
             {/* Workspace content fields */}
             <div className="bg-white rounded-3xl border border-[#EAE8E2] p-5 sm:p-8 shadow-xs">
           
+          {/* TAB STATS: STATYSTYKI */}
+          {activeSubTab === 'stats' && (
+            (() => {
+              const userUploadCounts = images.reduce((acc, img) => {
+                if (img.uploaderId) {
+                  acc[img.uploaderId] = (acc[img.uploaderId] || 0) + 1;
+                }
+                return acc;
+              }, {} as Record<string, number>);
+              
+              const totalMedia = images.length;
+              const totalPhotos = images.filter(img => img.mediaType !== 'video').length;
+              const totalVideos = images.filter(img => img.mediaType === 'video').length;
+              const uniqueUsersCount = Object.keys(userUploadCounts).length;
+              const usersAtLimit = Object.values(userUploadCounts).filter((count: number) => count >= 25).length;
+              const averageUploadsPerUser = uniqueUsersCount > 0 ? (totalMedia / uniqueUsersCount).toFixed(1) : '0';
+
+              return (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Statystyki Galerii</h2>
+                    <p className="text-xs text-gray-500 mt-1">Podsumowanie przesyłania materiałów przez gości weselnych.</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-[#FAF9F6] p-5 rounded-2xl border border-[#EAE8E2] flex items-center gap-4">
+                      <div className="bg-[#4A5D4E] text-white p-3 rounded-full shrink-0">
+                        <ImageIcon size={20} />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#8C8C8C] font-bold">Łącznie plików</p>
+                        <p className="text-2xl font-serif text-[#4A5D4E]">{totalMedia}</p>
+                        <p className="text-[10px] text-gray-500">Zdjęcia: {totalPhotos} | Filmy: {totalVideos}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-[#FAF9F6] p-5 rounded-2xl border border-[#EAE8E2] flex items-center gap-4">
+                      <div className="bg-[#C5A27D] text-white p-3 rounded-full shrink-0">
+                        <Users size={20} />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#8C8C8C] font-bold">Goście przesyłający</p>
+                        <p className="text-2xl font-serif text-[#4A5D4E]">{uniqueUsersCount}</p>
+                        <p className="text-[10px] text-gray-500">Średnio {averageUploadsPerUser} plików / gościa</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-[#FAF9F6] p-5 rounded-2xl border border-[#EAE8E2] flex items-center gap-4">
+                      <div className="bg-[#D9CDB8] text-[#4A5D4E] p-3 rounded-full shrink-0">
+                        <BarChart2 size={20} />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#8C8C8C] font-bold">Osiągnęli limit</p>
+                        <p className="text-2xl font-serif text-[#4A5D4E]">{usersAtLimit}</p>
+                        <p className="text-[10px] text-gray-500">gości wyczerpało limit 25 plików</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+
           {/* TAB 1: PHOTOS */}
           {activeSubTab === 'photos' && (
             <div>

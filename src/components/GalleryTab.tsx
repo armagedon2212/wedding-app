@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Camera, Download, Loader2, X, Play, Image as ImageIcon, Film, Trash2, Lock, Sparkles, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, storage, auth } from '../firebase';
-import { collection, addDoc, query, onSnapshot, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, onSnapshot, serverTimestamp, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { processOfflineQueue, addOfflineUpload } from '../lib/offlineUploader';
 
@@ -42,9 +42,11 @@ export default function GalleryTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<PhotoData[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ currentFileIndex: number; totalFiles: number; percentage: number } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'photos'|'videos'>('photos');
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Real-time checks for the release countdown
   const [unlockTime, setUnlockTime] = useState<number>(DEFAULT_WEDDING_UNLOCK_TIME);
@@ -69,8 +71,20 @@ export default function GalleryTab() {
   }, []);
 
   useEffect(() => {
-    const unsubAuth = auth.onAuthStateChanged((user) => {
+    const unsubAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
+      if (user) {
+        try {
+          const token = await user.getIdTokenResult();
+          const adminDoc = await getDoc(doc(db, 'settings', 'admins'));
+          const emails = adminDoc.exists() ? adminDoc.data().emails || [] : [];
+          setIsAdmin(token.claims?.admin === true || emails.includes(user.email) || user.email === 'lewkowicz.olaf2@gmail.com');
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        setIsAdmin(false);
+      }
     });
     return () => unsubAuth();
   }, []);
@@ -122,7 +136,7 @@ export default function GalleryTab() {
 
   // In order to only slider-zoom into accessible (own or unlocked) media:
   const zoomableMedia = filteredMedia.filter(img => 
-    isUnlocked || currentUser?.uid === img.uploaderId
+    isUnlocked || isAdmin || currentUser?.uid === img.uploaderId
   );
 
   // Determine current active detail image based on accessible index
@@ -209,7 +223,7 @@ export default function GalleryTab() {
   }, []);
 
   const resizeImage = (file: File, maxWidth: number): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new window.Image();
@@ -236,8 +250,10 @@ export default function GalleryTab() {
           ctx?.drawImage(img, 0, 0, width, height);
           resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
+        img.onerror = () => reject(new Error('Failed to load image for resize'));
         img.src = e.target?.result as string;
       };
+      reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(file);
     });
   };
@@ -318,16 +334,18 @@ export default function GalleryTab() {
       }
 
       setUploading(true);
+      setUploadProgress({ currentFileIndex: 1, totalFiles: filesToUpload.length, percentage: 0 });
       
-      for (const file of filesToUpload) {
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
         try {
           const isVideo = file.type.startsWith('video/');
           let thumbnailBase64 = '';
           
           if (isVideo) {
-             thumbnailBase64 = await generateVideoThumbnail(file);
+             thumbnailBase64 = await generateVideoThumbnail(file).catch(() => '');
           } else {
-             thumbnailBase64 = await resizeImage(file, 600);
+             thumbnailBase64 = await resizeImage(file, 600).catch(() => '');
           }
           
           const fileName = `${Date.now()}_${file.name}`;
@@ -343,6 +361,7 @@ export default function GalleryTab() {
               uploaderId: currentUser.uid
             });
             await addOfflineUpload(docRef.id, file, fileName);
+            setUploadProgress({ currentFileIndex: i + 1, totalFiles: filesToUpload.length, percentage: 100 });
             continue;
           }
 
@@ -351,7 +370,10 @@ export default function GalleryTab() {
           
           await new Promise<void>((resolve, reject) => {
              uploadTask.on('state_changed', 
-                null, 
+                (snapshot) => {
+                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                  setUploadProgress({ currentFileIndex: i + 1, totalFiles: filesToUpload.length, percentage: Math.round(progress) });
+                }, 
                 error => reject(error),
                 async () => {
                    try {
@@ -382,6 +404,7 @@ export default function GalleryTab() {
       }
       
       setUploading(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -421,35 +444,68 @@ export default function GalleryTab() {
               />
             </div>
 
-            <div className="flex justify-between items-start gap-4">
-              <p className="text-[#666] text-xs leading-relaxed max-w-[200px]">
-                {ownCount >= 25 
-                  ? "Dziękujemy! Osiągnąłeś pełny limit 25 udostępnionych ujęć."
-                  : `Możesz dodać jeszcze ${25 - ownCount} zdjęć lub filmów weselnych.`
-                }
-              </p>
-              
-              <input 
-                type="file" 
-                accept="image/*,video/*"
-                multiple 
-                className="hidden" 
-                ref={fileInputRef} 
-                onChange={handleUpload} 
-              />
-              
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || ownCount >= 25}
-                className="shrink-0 group relative inline-flex items-center gap-2 bg-[#4A5D4E] disabled:bg-gray-200 text-white disabled:text-gray-400 px-4 py-2.5 rounded-full hover:bg-[#3D4D40] transition-all disabled:scale-100 disabled:opacity-80 active:scale-95 text-xs font-bold tracking-wider uppercase shadow-xs cursor-pointer"
-              >
-                {uploading ? (
-                  <Loader2 className="animate-spin" size={14} />
-                ) : (
-                  <Camera size={14} />
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-start gap-4">
+                <p className="text-[#666] text-xs leading-relaxed max-w-[200px]">
+                  {ownCount >= 25 
+                    ? "Dziękujemy! Osiągnąłeś pełny limit 25 udostępnionych ujęć."
+                    : `Możesz dodać jeszcze ${25 - ownCount} zdjęć lub filmów weselnych.`
+                  }
+                </p>
+                
+                <input 
+                  type="file" 
+                  accept="image/*,video/*"
+                  multiple 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleUpload} 
+                />
+                
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || ownCount >= 25}
+                  className="shrink-0 group relative inline-flex items-center gap-2 bg-[#4A5D4E] disabled:bg-gray-200 text-white disabled:text-gray-400 px-4 py-2.5 rounded-full hover:bg-[#3D4D40] transition-all disabled:scale-100 disabled:opacity-80 active:scale-95 text-xs font-bold tracking-wider uppercase shadow-xs cursor-pointer"
+                >
+                  {uploading ? (
+                    <Loader2 className="animate-spin" size={14} />
+                  ) : (
+                    <Camera size={14} />
+                  )}
+                  <span>{uploading ? 'Wysyłam...' : 'Dodaj'}</span>
+                </button>
+              </div>
+
+              {/* Upload Progress Bar */}
+              <AnimatePresence>
+                {uploadProgress && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-[#FAF6EE] rounded-xl p-3 border border-[#F3E7D5] mt-1">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] uppercase font-bold text-[#A67C52]">
+                          Przesyłanie ({uploadProgress.currentFileIndex}/{uploadProgress.totalFiles})
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-[#8A633D]">
+                          {uploadProgress.percentage}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-white rounded-full overflow-hidden border border-[#eaeaea]">
+                        <motion.div 
+                          className="h-full bg-[#A67C52]"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${uploadProgress.percentage}%` }}
+                          transition={{ duration: 0.2 }}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
-                <span>{uploading ? 'Wysyłam...' : 'Dodaj'}</span>
-              </button>
+              </AnimatePresence>
             </div>
           </div>
         </section>
@@ -498,7 +554,7 @@ export default function GalleryTab() {
             <div className="grid grid-cols-2 gap-2 h-full">
               {filteredMedia.map((img) => {
                 const isOwner = currentUser?.uid === img.uploaderId;
-                const isLocked = !isOwner && !isUnlocked;
+                const isLocked = !isOwner && !isUnlocked && !isAdmin;
                 
                 return (
                   <div 

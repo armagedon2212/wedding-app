@@ -36,13 +36,13 @@ service cloud.firestore {
       return (isOld || isNew) &&
              data.url is string && data.url.size() <= 2048 &&
              data.thumbnailUrl is string && data.thumbnailUrl.size() <= 500000 && 
-             data.status in ['active', 'deleted'] &&
+             data.status in ['active', 'deleted', 'offline'] &&
              data.uploaderId == request.auth.uid;
     }
     
     match /photos/{photoId} {
-      allow read: if resource.data.status == 'active';
-      allow list: if resource.data.status == 'active';
+      allow read: if resource.data.status in ['active', 'offline'];
+      allow list: if resource.data.status in ['active', 'offline'];
       
       allow create: if isAnonymousOrSignedIn() && 
                        isValidId(photoId) &&
@@ -51,10 +51,11 @@ service cloud.firestore {
                        
       allow update: if isAnonymousOrSignedIn() && 
                        isValidId(photoId) &&
-                       existing().status == 'active' &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
-                       incoming().status == 'deleted' &&
-                       (existing().uploaderId == request.auth.uid || isAdmin());
+                       existing().status in ['active', 'offline'] &&
+                       (
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'deleted' && (existing().uploaderId == request.auth.uid || isAdmin())) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'url']) && incoming().status == 'active' && existing().status == 'offline' && existing().uploaderId == request.auth.uid)
+                       );
     }
     
     function isValidSong(data) {
