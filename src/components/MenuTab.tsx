@@ -56,27 +56,27 @@ export default function MenuTab() {
         <h1 className="font-serif text-4xl italic text-[#4A5D4E]">Karta Dań</h1>
       </div>
       
-      <div className="bg-white rounded-[28px] sm:rounded-[32px] shadow-sm border border-[#EAE8E2] p-4 sm:p-8 relative">
+      <div className="bg-white rounded-[28px] sm:rounded-[32px] shadow-sm border border-[#EAE8E2] p-1.5 sm:p-2 relative">
         {/* Dekoracyjne menu borders */}
-        <div className="absolute top-1.5 left-1.5 right-1.5 bottom-1.5 sm:top-2 sm:left-2 sm:right-2 sm:bottom-2 border border-[#EAE8E2] rounded-[20px] sm:rounded-[24px] pointer-events-none"></div>
+        <div className="border border-[#EAE8E2] rounded-[22px] sm:rounded-[26px] px-4 py-10 sm:px-8 sm:py-12">
+          <div className="flex flex-col gap-8 sm:gap-10">
+            {menuSections.map((section, idx) => (
+              <div key={idx}>
+                <section className="text-center px-2">
+                  <h2 className="text-[8px] sm:text-[10px] uppercase tracking-[0.4em] font-bold text-[#C5A27D] mb-1.5 sm:mb-2">{section.category}</h2>
+                  <p className="text-[#2D2D2D] font-serif italic text-lg sm:text-xl leading-tight">{section.title}</p>
+                  <p className="text-[#555] text-xs sm:text-sm mt-1 sm:mt-1.5 max-w-xs mx-auto">{section.description}</p>
+                </section>
+                {idx < menuSections.length - 1 && (
+                  <div className="w-8 h-[1px] bg-[#EAE8E2] mx-auto mt-8 sm:mt-10"></div>
+                )}
+              </div>
+            ))}
 
-        <div className="flex flex-col gap-8 sm:gap-10 relative z-10 py-6 sm:py-4">
-          {menuSections.map((section, idx) => (
-            <div key={idx}>
-              <section className="text-center px-2">
-                <h2 className="text-[8px] sm:text-[10px] uppercase tracking-[0.4em] font-bold text-[#C5A27D] mb-1.5 sm:mb-2">{section.category}</h2>
-                <p className="text-[#2D2D2D] font-serif italic text-lg sm:text-xl leading-tight">{section.title}</p>
-                <p className="text-[#555] text-xs sm:text-sm mt-1 sm:mt-1.5 max-w-xs mx-auto">{section.description}</p>
-              </section>
-              {idx < menuSections.length - 1 && (
-                <div className="w-8 h-[1px] bg-[#EAE8E2] mx-auto mt-8 sm:mt-10"></div>
-              )}
-            </div>
-          ))}
-
-          {menuSections.length === 0 && (
-            <p className="text-center text-[#8C8C8C] font-serif italic">Brak dań w karcie.</p>
-          )}
+            {menuSections.length === 0 && (
+              <p className="text-center text-[#8C8C8C] font-serif italic">Brak dań w karcie.</p>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

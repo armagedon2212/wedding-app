@@ -26,8 +26,15 @@ export default function SuggestTab() {
         ...doc.data()
       })) as Song[];
       
-      // Sort locally by votes descending
-      fetched.sort((a, b) => b.voteCount - a.voteCount);
+      // Sort locally by votes descending, then by newest
+      fetched.sort((a, b) => {
+        if (b.voteCount !== a.voteCount) {
+          return b.voteCount - a.voteCount;
+        }
+        const timeA = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : Date.now();
+        const timeB = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : Date.now();
+        return timeB - timeA;
+      });
       setSongs(fetched);
 
       if (auth.currentUser) {
@@ -60,7 +67,7 @@ export default function SuggestTab() {
     setSubmitting(true);
     try {
       await addDoc(collection(db, 'songs'), {
-        title: title.trim(),
+        title: title.trim().substring(0, 200),
         artist: '',
         createdAt: serverTimestamp(),
         status: 'active',
@@ -140,6 +147,7 @@ export default function SuggestTab() {
             value={title}
             onChange={e => setTitle(e.target.value)}
             required 
+            maxLength={200}
             className="w-full bg-[#FAF9F6] border border-[#EAE8E2] rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-2 focus:ring-[#4A5D4E] focus:border-transparent transition-all" 
             placeholder="np. ABBA - Dancing Queen" 
           />

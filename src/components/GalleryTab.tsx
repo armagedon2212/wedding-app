@@ -202,20 +202,22 @@ export default function GalleryTab() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'photos'), where('status', 'in', ['active', 'offline']));
+    const q = collection(db, 'photos');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as PhotoData[];
       
-      fetched.sort((a, b) => {
+      const activePhotos = fetched.filter(p => !p.status || p.status === 'active' || p.status === 'offline');
+      
+      activePhotos.sort((a, b) => {
         const timeA = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : 0;
         const timeB = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : 0;
         return timeB - timeA;
       });
       
-      setImages(fetched);
+      setImages(activePhotos);
     }, (error) => {
       console.error("Error fetching photos snapshot in gallery:", error);
     });

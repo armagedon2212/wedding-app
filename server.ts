@@ -61,6 +61,32 @@ async function startServer() {
     }
   });
 
+  // Proxy endpoint do pobierania plików z Firebase bez problemów CORS
+  app.get("/api/proxy-image", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) {
+        return res.status(400).send("Brak URL do pobrania.");
+      }
+
+      const response = await fetch(targetUrl);
+      if (!response.ok) {
+        return res.status(response.status).send("Błąd podczas pobierania pliku.");
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (contentType) {
+        res.setHeader("Content-Type", contentType);
+      }
+      
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error("Błąd w proxy-image:", error);
+      res.status(500).send("Wystąpił błąd serwera podczas proxy.");
+    }
+  });
+
   // Vite middleware dla developmentu
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

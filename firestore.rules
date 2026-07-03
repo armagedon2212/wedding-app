@@ -35,14 +35,13 @@ service cloud.firestore {
                   data.mediaType in ['image', 'video'];
       return (isOld || isNew) &&
              data.url is string && data.url.size() <= 2048 &&
-             data.thumbnailUrl is string && data.thumbnailUrl.size() <= 500000 && 
+             data.thumbnailUrl is string && data.thumbnailUrl.size() <= 5000000 && 
              data.status in ['active', 'deleted', 'offline'] &&
              data.uploaderId == request.auth.uid;
     }
     
     match /photos/{photoId} {
-      allow read: if resource.data.status in ['active', 'offline'];
-      allow list: if resource.data.status in ['active', 'offline'];
+      allow read: if true;
       
       allow create: if isAnonymousOrSignedIn() && 
                        isValidId(photoId) &&

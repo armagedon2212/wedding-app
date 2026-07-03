@@ -22,8 +22,15 @@ export default function DjView() {
         ...d.data()
       })) as Song[];
       
-      // Sort locally
-      fetched.sort((a, b) => b.voteCount - a.voteCount);
+      // Sort locally by votes descending, then by newest
+      fetched.sort((a, b) => {
+        if (b.voteCount !== a.voteCount) {
+          return b.voteCount - a.voteCount;
+        }
+        const timeA = (a as any).createdAt?.toMillis ? (a as any).createdAt.toMillis() : Date.now();
+        const timeB = (b as any).createdAt?.toMillis ? (b as any).createdAt.toMillis() : Date.now();
+        return timeB - timeA;
+      });
       setSongs(fetched);
     }, (error) => {
       console.error("Error fetching songs in DJ view:", error);

@@ -8,9 +8,10 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth, storage } from '../firebase';
 import { 
-  collection, doc, getDoc, setDoc, query, onSnapshot, where, updateDoc 
+  collection, doc, getDoc, setDoc, query, onSnapshot, where, updateDoc, addDoc, getDocs 
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
+import { ref, listAll, getDownloadURL, getMetadata } from 'firebase/storage';
 import { Link, useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -172,20 +173,22 @@ export default function AdminPanel() {
     }
     
     setLoading(true);
-    const q = query(collection(db, 'photos'), where('status', 'in', ['active', 'offline']));
+    const q = collection(db, 'photos');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as PhotoData[];
       
-      fetched.sort((a, b) => {
+      const activePhotos = fetched.filter(p => !p.status || p.status === 'active' || p.status === 'offline');
+      
+      activePhotos.sort((a, b) => {
         const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
         const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
         return timeB - timeA;
       });
       
-      setImages(fetched);
+      setImages(activePhotos);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching photos snapshot:", error);
@@ -577,7 +580,8 @@ export default function AdminPanel() {
       
       for (let i = 0; i < images.length; i++) {
         try {
-          const response = await fetch(images[i].url);
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(images[i].url)}`;
+          const response = await fetch(proxyUrl);
           const blob = await response.blob();
           const ext = images[i].mediaType === 'video' ? 'mp4' : 'jpg';
           folder?.file(`wspomnienie_${i+1}.${ext}`, blob);
@@ -591,6 +595,45 @@ export default function AdminPanel() {
     } catch (e) {
       console.error(e);
       alert("Błąd pobierania ZIP.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const syncPhotos = async () => {
+    if (!window.confirm("Rozpocząć synchronizację zdjęć z dysku Storage do bazy danych?")) return;
+    setDownloading(true);
+    try {
+      const listRef = ref(storage, 'photos/');
+      const res = await listAll(listRef);
+      
+      // Get all current active photos in db
+      const q = collection(db, 'photos');
+      const querySnapshot = await getDocs(q);
+      const existingUrls = querySnapshot.docs.map(d => d.data().url);
+      
+      let syncedCount = 0;
+      for (const itemRef of res.items) {
+        const url = await getDownloadURL(itemRef);
+        if (!existingUrls.includes(url)) {
+          // Add to DB
+          const meta = await getMetadata(itemRef);
+          const isVideo = meta.contentType?.startsWith('video/');
+          await addDoc(collection(db, 'photos'), {
+            url: url,
+            thumbnailUrl: url,
+            mediaType: isVideo ? 'video' : 'image',
+            createdAt: new Date(),
+            status: 'active',
+            uploaderId: currentUser?.uid || 'admin-sync'
+          });
+          syncedCount++;
+        }
+      }
+      alert(`Zakończono synchronizację. Dodano ${syncedCount} brakujących zdjęć do bazy danych.`);
+    } catch (error: any) {
+      console.error("Błąd synchronizacji:", error);
+      alert("Wystąpił błąd: " + error.message);
     } finally {
       setDownloading(false);
     }
@@ -879,21 +922,30 @@ export default function AdminPanel() {
                   <h2 className="text-2xl font-serif italic text-[#4A5D4E]">Zarządzanie Zdjęciami</h2>
                   <p className="text-xs text-gray-500 mt-1">Udostępnione momenty przez gości weselnych ({images.length} plików).</p>
                 </div>
-                <button 
-                  onClick={downloadAll}
-                  disabled={downloading || images.length === 0}
-                  className="inline-flex items-center gap-2 bg-[#C5A27D] hover:bg-[#b0906f] text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
-                >
-                  {downloading ? (
-                    <>
-                      <Loader2 className="animate-spin" size={14} /> ZIP w toku...
-                    </>
-                  ) : (
-                    <>
-                      <Download size={14} /> Ściągnij ZIP ({images.length})
-                    </>
-                  )}
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={syncPhotos}
+                    disabled={downloading}
+                    className="inline-flex items-center gap-2 bg-[#EAE8E2] hover:bg-[#DDD] text-[#2D2D2D] px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    <RotateCcw size={14} /> Synchr.
+                  </button>
+                  <button 
+                    onClick={downloadAll}
+                    disabled={downloading || images.length === 0}
+                    className="inline-flex items-center gap-2 bg-[#C5A27D] hover:bg-[#b0906f] text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {downloading ? (
+                      <>
+                        <Loader2 className="animate-spin" size={14} /> ZIP w toku...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={14} /> Ściągnij ZIP ({images.length})
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {loading ? (
